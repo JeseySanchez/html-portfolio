@@ -3,7 +3,7 @@
   "use strict";
 
   // Bump together with version.json and the ?v= links in index.html.
-  const APP_VERSION = "8";
+  const APP_VERSION = "9";
   const STORE_KEY = "kiko-v1";
 
   // GitHub Pages lets browsers cache index.html too, so a returning visitor
@@ -196,80 +196,70 @@
     if (mood) play($(".kiko", k), mood);
   }
 
-  // ---------- Kiko sprite animations ----------
-  // Each mood is a horizontal strip of frames. Large strips exist for the
-  // moods shown on hero screens, small ones for the coach and the path.
-  const ANIMS = {
-    idle: { n: 18, fps: 6, loop: true },
-    welcome: { n: 21, fps: 9, then: "idle" },
-    thinking: { n: 26, fps: 7, loop: true },
-    correct: { n: 24, fps: 14, then: "idle" },
-    wrong: { n: 24, fps: 10, then: "idle" },
-    celebrate: { n: 22, fps: 10, loop: true },
+  // ---------- Kiko's moods ----------
+  // One still pose per mood, brought to life with smooth CSS motion (see
+  // .m-* in styles.css) and quick crossfades when the pose changes. Kiko
+  // only moves a lot when something happens; at rest he breathes and blinks.
+  const POSES = ["idle", "blink", "welcome", "thinking", "correct", "wrong", "encourage", "celebrate"];
+  const poseSrc = (pose) => `assets/poses/${pose}.webp?v=${APP_VERSION}`;
+  // One-off moods: [pose, how long to hold it (ms), mood that follows].
+  const SEQUENCES = {
+    welcome: [["welcome", 2400]],
+    correct: [["correct", 1500]],
+    wrong: [["wrong", 1100], ["encourage", 1700]],
   };
-  const spriteSrc = (anim, big) => `assets/kiko-${anim}${big ? "" : "-sm"}.webp?v=${APP_VERSION}`;
-  const kiko = (anim, cls = "", big = false) =>
-    `<span class="kiko ${cls}" data-anim="${anim}" ${big ? "data-big" : ""} role="img" aria-label="Kiko"><img alt=""></span>`;
-  const coach = (text, anim = "idle") => `<div class="coach">${kiko(anim)}<div class="bubble">${text}</div></div>`;
+  const kiko = (mood, cls = "") =>
+    `<span class="kiko ${cls}" data-mood="${mood}" role="img" aria-label="Kiko"><img class="blink" src="${poseSrc("blink")}" alt=""></span>`;
+  const coach = (text, mood = "idle") => `<div class="coach">${kiko(mood)}<div class="bubble">${text}</div></div>`;
 
-  // Decoded strips, so a mood only starts once its whole image is ready.
-  const strips = {};
-  function strip(src) {
-    if (!strips[src]) {
-      const im = new Image();
-      im.src = src;
-      strips[src] = (im.decode ? im.decode() : new Promise((r) => (im.onload = r))).catch(() => {});
-    }
-    return strips[src];
+  // Show a pose, crossfading from whatever was there before.
+  function showPose(el, pose) {
+    const old = $$("img.pose", el);
+    const img = document.createElement("img");
+    img.className = "pose";
+    img.alt = "";
+    img.src = poseSrc(pose);
+    el.prepend(img);
+    old.forEach((o) => { o.classList.add("leaving"); setTimeout(() => o.remove(), 260); });
+    el.className = el.className.replace(/\bm-\S+/g, "").trim() + ` m-${pose}`;
   }
 
-  // A single timer sets each sprite's frame directly (no CSS/WAAPI step
-  // easing, which browsers support unevenly). One-off moods hand back to
-  // `then` once their last frame has shown.
-  const players = new Set();
-  function play(el, anim) {
+  // Set Kiko's mood. Reactions play their poses, then Kiko settles down
+  // (back to dancing on the celebration screen, otherwise to idle).
+  function play(el, mood) {
     if (!el) return;
-    const a = ANIMS[anim], img = $("img", el), src = spriteSrc(anim, el.hasAttribute("data-big"));
-    const token = (el._token = {});
-    strip(src).then(() => {
-      if (el._token !== token) return; // a newer mood took over
-      img.src = src;
-      img.style.width = `${a.n * 100}%`;
-      img.style.transform = "translateX(0)";
-      el._kiko = { a, start: performance.now(), frame: 0 };
-      players.add(el);
-      el.classList.add("ready");
-    });
+    clearTimeout(el._timer);
+    const rest = el.dataset.mood;
+    const steps = SEQUENCES[mood] || [[mood, 0]];
+    let i = 0;
+    const next = () => {
+      if (!el.isConnected) return;
+      if (i >= steps.length) { showPose(el, rest === "celebrate" ? rest : "idle"); return; }
+      const [pose, hold] = steps[i++];
+      showPose(el, pose);
+      if (hold) el._timer = setTimeout(next, hold);
+    };
+    next();
   }
-  (function tick(now) {
-    for (const el of players) {
-      if (!el.isConnected) { players.delete(el); continue; }
-      const k = el._kiko;
-      let f = Math.floor(((now - k.start) * k.a.fps) / 1000);
-      if (!k.a.loop && f >= k.a.n) {
-        players.delete(el);
-        play(el, k.a.then);
-        continue;
+
+  // Blink every few seconds while resting.
+  (function blinkLoop() {
+    $$(".kiko.m-idle").forEach((el) => {
+      if (Math.random() < 0.6) {
+        el.classList.add("blinking");
+        setTimeout(() => el.classList.remove("blinking"), 140);
       }
-      f %= k.a.n;
-      if (f !== k.frame) {
-        k.frame = f;
-        $("img", el).style.transform = `translateX(${(-f * 100) / k.a.n}%)`;
-      }
-    }
-    requestAnimationFrame(tick);
-  })(performance.now());
-  // Warm the cache for the moods the coach switches between.
-  window.addEventListener("load", () => {
-    ["idle", "thinking", "correct", "wrong"].forEach((m) => strip(spriteSrc(m, false)));
-    ["idle", "celebrate"].forEach((m) => strip(spriteSrc(m, true)));
-  });
+    });
+    setTimeout(blinkLoop, 2600 + Math.random() * 2600);
+  })();
+  window.addEventListener("load", () => POSES.forEach((p) => (new Image().src = poseSrc(p))));
 
   // Feedback sheet that slides up from the bottom of the screen, with Kiko
   // reacting in it (the sheet covers the coach on small screens).
   function showSheet(html) {
     sheetRoot.innerHTML = html;
-    $$(".kiko[data-anim]", sheetRoot).forEach((el) => play(el, el.dataset.anim));
+    app.classList.add("has-sheet"); // the sheet's Kiko reacts; the coach's steps aside
+    $$(".kiko[data-mood]", sheetRoot).forEach((el) => play(el, el.dataset.mood));
   }
   const sheet = (ok, title, body = "", btn = "Continue") => `
     <div class="fb sheet ${ok ? "ok" : "no"}" role="status">
@@ -335,7 +325,8 @@
     if ("speechSynthesis" in window) speechSynthesis.cancel();
     app.innerHTML = html;
     sheetRoot.innerHTML = "";
-    $$(".kiko[data-anim]", app).forEach((el) => play(el, el.dataset.anim));
+    app.classList.remove("has-sheet");
+    $$(".kiko[data-mood]", app).forEach((el) => play(el, el.dataset.mood));
     app.classList.remove("enter");
     void app.offsetWidth;
     app.classList.add("enter");
@@ -347,7 +338,7 @@
   function showWelcome() {
     screen(`
       <section class="welcome">
-        <div class="hero-wrap">${kiko("welcome", "hero-sprite float", true)}</div>
+        <div class="hero-wrap">${kiko("welcome", "hero-sprite")}</div>
         <h1>Hi, I'm <span class="brand">Kiko</span>!</h1>
         <p class="lead">I'll teach you a new language using <b>methods backed by learning science</b>, one small task at a time.</p>
         <h2>What do you want to learn?</h2>
@@ -450,7 +441,7 @@
     gain(xp);
     screen(`
       <section class="done-screen">
-        <div class="hero-wrap">${kiko("celebrate", "hero-sprite", true)}</div>
+        <div class="hero-wrap">${kiko("celebrate", "hero-sprite")}</div>
         <h1>${title}</h1>
         <div class="stats">
           <div class="stat"><b class="count" data-n="${xp}">0</b><small>XP earned</small></div>

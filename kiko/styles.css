@@ -138,18 +138,55 @@ kbd {
 
 /* ---------- Kiko coach ---------- */
 .coach { display: flex; align-items: flex-end; gap: 10px; margin: 20px 0; }
-/* Kiko sprite: a strip of 250×300 frames; app.js steps it one frame at a time. */
-.kiko { display: inline-block; flex: none; overflow: hidden; aspect-ratio: 5 / 6; }
-.kiko img { display: block; height: 100%; max-width: none; }
-.kiko:not(.ready) img { visibility: hidden; } /* until its first strip has loaded */
-.coach .kiko { width: 84px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.12)); }
+/* ---------- Kiko ----------
+   One pose per mood (assets/poses), moved with smooth transforms. New poses
+   slide in underneath while the old one fades out, so there's no flicker. */
+.kiko { position: relative; display: inline-block; flex: none; aspect-ratio: 5 / 6; transform-origin: 50% 100%; }
+.kiko img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.kiko .pose.leaving { opacity: 0; transition: opacity 0.22s ease; }
+.kiko .blink { z-index: 2; opacity: 0; }
+.kiko.m-idle.blinking .blink { opacity: 1; }
+.kiko:not(.m-idle) .blink { display: none; }
+.coach .kiko { width: 84px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.12)); transition: opacity 0.2s; }
+.has-sheet .coach .kiko { opacity: 0; }
+
+.kiko.m-idle { animation: breathe 4.5s ease-in-out infinite; }
+.kiko.m-thinking { animation: ponder 3.6s ease-in-out infinite; }
+.kiko.m-correct { animation: hop 0.9s cubic-bezier(0.3, 0.7, 0.4, 1); }
+.kiko.m-wrong { animation: droop 0.6s ease-out forwards; }
+.kiko.m-encourage { animation: perk 0.55s var(--spring); }
+.kiko.m-welcome { animation: wave 1.8s ease-in-out; }
+.kiko.m-celebrate { animation: dance 1.2s ease-in-out infinite; }
+@keyframes breathe { 0%,100% { transform: none; } 50% { transform: scale(0.992, 1.012); } }
+@keyframes ponder { 0%,100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
+@keyframes hop {
+  0% { transform: scale(1.1, 0.88); }
+  28% { transform: translateY(-16%) scale(0.94, 1.08); }
+  52% { transform: translateY(0) scale(1.08, 0.92); }
+  68% { transform: translateY(-4%) scale(0.98, 1.02); }
+  84% { transform: translateY(0) scale(1.02, 0.98); }
+  100% { transform: none; }
+}
+@keyframes droop { 0% { transform: none; } 45% { transform: translateY(5%) scale(1.05, 0.93); } 100% { transform: translateY(3%) scale(1.03, 0.96); } }
+@keyframes perk { 0% { transform: translateY(3%) scale(1.03, 0.96); } 50% { transform: translateY(-4%) scale(0.97, 1.04); } 100% { transform: none; } }
+@keyframes wave {
+  0% { opacity: 0; transform: translateY(8%) scale(0.92); }
+  25% { opacity: 1; transform: none; }
+  40% { transform: rotate(-4deg); } 55% { transform: rotate(4deg); }
+  70% { transform: rotate(-3deg); } 85% { transform: rotate(1.5deg); } 100% { transform: none; }
+}
+@keyframes dance {
+  0%,100% { transform: none; }
+  25% { transform: translateY(-7%) rotate(-5deg) scale(0.97, 1.04); }
+  50% { transform: scale(1.05, 0.95); }
+  75% { transform: translateY(-7%) rotate(5deg) scale(0.97, 1.04); }
+}
 .bubble {
   position: relative; background: var(--surface); border: 2px solid var(--line);
   border-radius: 18px 18px 18px 4px; padding: 10px 14px; font-weight: 600;
   transform-origin: 0 100%;
 }
 .bubble.pop { animation: popIn 0.35s var(--spring); }
-@keyframes float { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-10px) rotate(-1.5deg); } }
 
 /* ---------- Welcome & celebrations ---------- */
 .welcome, .done-screen, .intro { text-align: center; }
@@ -157,11 +194,8 @@ kbd {
 .hero-wrap::before { /* soft glow behind Kiko */
   content: ""; position: absolute; inset: 12% 8% 4%; border-radius: 50%; z-index: -1;
   background: radial-gradient(circle, color-mix(in srgb, var(--pink) 45%, transparent), transparent 70%);
-  animation: glow 3s ease-in-out infinite;
 }
-@keyframes glow { 0%,100% { transform: scale(0.95); opacity: 0.7; } 50% { transform: scale(1.08); opacity: 1; } }
 .hero-sprite { width: min(250px, 66vw); filter: drop-shadow(0 12px 18px rgba(0,0,0,0.12)); }
-.hero-sprite.float { animation: float 3s ease-in-out infinite; }
 .brand { color: var(--green); display: inline-block; animation: popIn 0.6s var(--spring) 0.2s backwards; }
 .lang-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; }
 .lang-btn {
@@ -223,12 +257,11 @@ kbd {
 .node.locked button { background: var(--line); box-shadow: 0 6px 0 color-mix(in srgb, var(--line) 70%, #000); font-size: 1.3rem; }
 .node.current button { animation: pulse 1.8s infinite; }
 @keyframes pulse { 0%,100% { outline: 0 solid transparent; } 50% { outline: 7px solid color-mix(in srgb, var(--green) 30%, transparent); } }
-.node-kiko {
+.kiko.node-kiko { /* sits still on the current task; it only blinks */
   position: absolute; left: 36px; top: -42px; width: 54px; pointer-events: none;
   filter: drop-shadow(0 3px 3px rgba(0,0,0,0.15));
-  animation: popIn 0.5s var(--spring) 0.7s backwards, bob 1.4s ease-in-out 1.2s infinite;
+  animation: popIn 0.5s var(--spring) 0.7s backwards;
 }
-@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 .node-label { display: flex; flex-direction: column; }
 .node-label small { color: var(--muted); font-weight: 600; }
 .node.locked .node-label { opacity: 0.55; }
