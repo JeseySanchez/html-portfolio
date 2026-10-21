@@ -33,13 +33,15 @@ Kiko is a language-learning web app that teaches you **how** to learn a language
 - **Audio.** Words and phrases are read aloud with the browser's built-in speech. Speech recognition works in Chrome, Edge and Safari.
 - **Tap-to-translate story.** Tap any word for its meaning, or show the English for a whole sentence.
 - **Progress.** XP, your streak and progress through the path are saved in your browser's `localStorage`.
-- **Kiko's moods.** One pose per mood (`assets/poses/`), animated with smooth motion and crossfades rather than frame-by-frame, so Kiko stays calm unless something happens:
-  - 👋 **Welcome**: waves hello on the welcome screen, then settles.
-  - 🐰 **Idle**: breathes softly and blinks every few seconds.
-  - 🤔 **Thinking**: slowly tilts his head while you answer.
-  - 🎉 **Correct**: a springy hop with confetti.
-  - 🥺 **Wrong**: ears droop, then he perks up with an encouraging smile.
-  - 🏆 **Celebration**: dances when you finish a lesson.
+- **Kiko the puppet.** Kiko is assembled from 20 separate art layers (body, head, ears, arms, legs, tail, backpack, open/closed eyes and three mouths). Each part rotates around its own joint, so he moves smoothly instead of swapping pictures:
+  - 👋 **Welcome**: bounces in and waves.
+  - 🐰 **Idle**: breathes, sways his head, drifts his ears and tail, and blinks.
+  - 🤔 **Thinking**: tilts his head and perks an ear, with a "?" beside him.
+  - 🎉 **Correct**: a springy hop with ears and legs following through.
+  - 🥺 **Wrong**: a startled "oh!", ears droop, then he perks up smiling.
+  - 🏆 **Celebration**: a happy dance when you finish a task.
+
+  The layers come from the Phase 1 layer kit; `tools/build_rig.py` turns the kit into `assets/rig/*.webp` and `kiko-rig.js`.
 - **Animations.** Flashcards flip in 3D, review cards fly off once rated, confetti bursts for right answers, wrong answers shake, sentence tiles glide into place, and units pop in along the path. If your device is set to reduce motion, these are switched off.
 - **Sound effects.** Short tones are generated in the browser, so there are no audio files. Tap 🔈 to mute.
 - **Keyboard shortcuts** (on computers): `1`–`4` pick an answer or a rating, `Space` flips a card, and `Enter` continues.

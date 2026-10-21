@@ -3,7 +3,7 @@
   "use strict";
 
   // Bump together with version.json and the ?v= links in index.html.
-  const APP_VERSION = "10";
+  const APP_VERSION = "11";
   const STORE_KEY = "kiko-v1";
 
   // GitHub Pages lets browsers cache index.html too, so a returning visitor
@@ -311,32 +311,45 @@
     if (mood) play($(".kiko", k), mood);
   }
 
-  // ---------- Kiko's moods ----------
-  // One still pose per mood, brought to life with smooth CSS motion (see
-  // .m-* in styles.css) and quick crossfades when the pose changes. Kiko
-  // only moves a lot when something happens; at rest he breathes and blinks.
-  const POSES = ["idle", "blink", "welcome", "thinking", "correct", "wrong", "encourage", "celebrate"];
-  const poseSrc = (pose) => `assets/poses/${pose}.webp?v=${APP_VERSION}`;
-  // One-off moods: [pose, how long to hold it (ms), mood that follows].
+  // ---------- Kiko the puppet ----------
+  // Kiko is assembled from the layered kit (kiko-rig.js): nested full-frame
+  // groups that rotate around measured pivots, so the head carries the face
+  // and ears, and arms, legs, ears and tail move on their own. Moods are CSS
+  // animations on those parts (.m-* in styles.css); blinking and expressions
+  // swap the eye and mouth layers.
+  const MOVABLE = new Set(["tail", "leg_left", "leg_right", "arm_left", "arm_right", "ear_left", "ear_right"]);
+  const rigSrc = (id) => `assets/rig/${id}.webp?v=${APP_VERSION}`;
+  const PUPPET = (() => {
+    const R = KIKO_RIG;
+    const part = (id, pivot, inner) =>
+      `<div class="kp kp-${id}" style="transform-origin:${pivot[0]}% ${pivot[1]}%">${inner}</div>`;
+    const img = (l) =>
+      `<img class="kl kl-${l.id}" src="${rigSrc(l.id)}" alt="" style="left:${l.box[0]}%;top:${l.box[1]}%;width:${l.box[2]}%;height:${l.box[3]}%">`;
+    const minZ = (g) => Math.min(...R.layers.filter((l) => l.parent === g).map((l) => l.z), ...Object.values(R.groups).filter((c) => c.parent === g).map((c) => minZ(c.id)));
+    const build = (g) => [
+      ...R.layers.filter((l) => l.parent === g).map((l) => ({ z: l.z, html: MOVABLE.has(l.id) ? part(l.id, l.pivot, img(l)) : img(l) })),
+      ...Object.values(R.groups).filter((c) => c.parent === g).map((c) => ({ z: minZ(c.id), html: part(c.id, c.pivot, build(c.id)) })),
+    ].sort((a, b) => a.z - b.z).map((x) => x.html).join("");
+    return part("root", R.groups.root.pivot, build("root"));
+  })();
+  // Show Kiko only once every layer has loaded, so he never appears in pieces.
+  Promise.all(KIKO_RIG.layers.map((l) => { const im = new Image(); im.src = rigSrc(l.id); return im.decode().catch(() => {}); }))
+    .then(() => document.documentElement.classList.add("rig-ready"));
+
+  // Each pose sets the body animation and the mouth.
+  const MOUTH = { idle: "smile", welcome: "smile", thinking: "neutral", correct: "smile", oops: "surprised", wrong: "neutral", encourage: "smile", celebrate: "smile" };
+  // One-off moods: [pose, how long to hold it (ms)]; then Kiko settles down.
   const SEQUENCES = {
-    welcome: [["welcome", 2400]],
-    correct: [["correct", 1500]],
-    wrong: [["wrong", 1100], ["encourage", 1700]],
+    welcome: [["welcome", 2600]],
+    correct: [["correct", 1300]],
+    wrong: [["oops", 380], ["wrong", 1000], ["encourage", 1400]],
   };
   const kiko = (mood, cls = "") =>
-    `<span class="kiko ${cls}" data-mood="${mood}" role="img" aria-label="Kiko"><img class="blink" src="${poseSrc("blink")}" alt=""></span>`;
+    `<span class="kiko ${cls}" data-mood="${mood}" role="img" aria-label="Kiko">${PUPPET}<span class="kiko-think" aria-hidden="true">?</span></span>`;
   const coach = (text, mood = "idle") => `<div class="coach">${kiko(mood)}<div class="bubble">${text}</div></div>`;
 
-  // Show a pose, crossfading from whatever was there before.
   function showPose(el, pose) {
-    const old = $$("img.pose", el);
-    const img = document.createElement("img");
-    img.className = "pose";
-    img.alt = "";
-    img.src = poseSrc(pose);
-    el.prepend(img);
-    old.forEach((o) => { o.classList.add("leaving"); setTimeout(() => o.remove(), 260); });
-    el.className = el.className.replace(/\bm-\S+/g, "").trim() + ` m-${pose}`;
+    el.className = el.className.replace(/\b(m|mouth)-\S+/g, "").trim() + ` m-${pose} mouth-${MOUTH[pose]}`;
   }
 
   // Set Kiko's mood. Reactions play their poses, then Kiko settles down
@@ -357,17 +370,16 @@
     next();
   }
 
-  // Blink every few seconds while resting.
+  // Blink every few seconds (not mid-surprise).
   (function blinkLoop() {
-    $$(".kiko.m-idle").forEach((el) => {
+    $$(".kiko:not(.mouth-surprised)").forEach((el) => {
       if (Math.random() < 0.6) {
         el.classList.add("blinking");
         setTimeout(() => el.classList.remove("blinking"), 140);
       }
     });
-    setTimeout(blinkLoop, 2600 + Math.random() * 2600);
+    setTimeout(blinkLoop, 2400 + Math.random() * 2600);
   })();
-  window.addEventListener("load", () => POSES.forEach((p) => (new Image().src = poseSrc(p))));
 
   // Feedback sheet that slides up from the bottom of the screen, with Kiko
   // reacting in it (the sheet covers the coach on small screens).
