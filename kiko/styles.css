@@ -138,21 +138,16 @@ kbd {
 
 /* ---------- Kiko coach ---------- */
 .coach { display: flex; align-items: flex-end; gap: 10px; margin: 20px 0; }
-/* Idle sprite: an 18-frame strip shifted one frame at a time (6 fps). */
-.kiko-idle { display: inline-block; flex: none; overflow: hidden; aspect-ratio: 120 / 165; }
-.kiko-idle img { display: block; height: 100%; width: 1800%; max-width: none; animation: idle 3s steps(18) infinite; }
-@keyframes idle { to { transform: translateX(-100%); } }
-.coach .kiko-idle { width: 72px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.12)); transform-origin: 50% 100%; }
+/* Kiko sprite: a strip of 250×300 frames; app.js steps it one frame at a time. */
+.kiko { display: inline-block; flex: none; overflow: hidden; aspect-ratio: 5 / 6; }
+.kiko img { display: block; height: 100%; max-width: none; }
+.coach .kiko { width: 84px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.12)); }
 .bubble {
   position: relative; background: var(--surface); border: 2px solid var(--line);
   border-radius: 18px 18px 18px 4px; padding: 10px 14px; font-weight: 600;
   transform-origin: 0 100%;
 }
 .bubble.pop { animation: popIn 0.35s var(--spring); }
-.coach .kiko-idle.hop { animation: hop 0.6s ease; }
-.coach .kiko-idle.wobble { animation: wobble 0.5s ease; }
-@keyframes hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-18px) rotate(-4deg); } 70% { transform: translateY(0) scale(1.06, 0.94); } }
-@keyframes wobble { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
 @keyframes float { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-10px) rotate(-1.5deg); } }
 
 /* ---------- Welcome & celebrations ---------- */
@@ -164,10 +159,8 @@ kbd {
   animation: glow 3s ease-in-out infinite;
 }
 @keyframes glow { 0%,100% { transform: scale(0.95); opacity: 0.7; } 50% { transform: scale(1.08); opacity: 1; } }
-.hero-idle { width: min(220px, 60vw); animation: float 3s ease-in-out infinite; filter: drop-shadow(0 12px 18px rgba(0,0,0,0.12)); }
-.hero-kiko { width: min(260px, 70vw); height: auto; animation: float 3s ease-in-out infinite; filter: drop-shadow(0 12px 18px rgba(0,0,0,0.12)); }
-.hero-kiko.cheer { animation: cheer 0.8s var(--spring) 2, float 3s ease-in-out 1.6s infinite; }
-@keyframes cheer { 0%,100% { transform: translateY(0) scale(1); } 30% { transform: translateY(-30px) rotate(-6deg) scale(1.04); } 60% { transform: translateY(0) scale(1.08, 0.92); } }
+.hero-sprite { width: min(250px, 66vw); filter: drop-shadow(0 12px 18px rgba(0,0,0,0.12)); }
+.hero-sprite.float { animation: float 3s ease-in-out infinite; }
 .brand { color: var(--green); display: inline-block; animation: popIn 0.6s var(--spring) 0.2s backwards; }
 .lang-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; }
 .lang-btn {
@@ -230,7 +223,7 @@ kbd {
 .node.current button { animation: pulse 1.8s infinite; }
 @keyframes pulse { 0%,100% { outline: 0 solid transparent; } 50% { outline: 7px solid color-mix(in srgb, var(--green) 30%, transparent); } }
 .node-kiko {
-  position: absolute; left: 38px; top: -34px; width: 46px; pointer-events: none;
+  position: absolute; left: 36px; top: -42px; width: 54px; pointer-events: none;
   filter: drop-shadow(0 3px 3px rgba(0,0,0,0.15));
   animation: popIn 0.5s var(--spring) 0.7s backwards, bob 1.4s ease-in-out 1.2s infinite;
 }
@@ -324,6 +317,8 @@ kbd {
 @keyframes sheetUp { from { transform: translateY(100%); } to { transform: none; } }
 .sheet-inner { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
 .sheet-text b { font-size: 1.25rem; font-weight: 900; }
+.sheet-head { display: flex; align-items: flex-end; gap: 12px; }
+.sheet-kiko { width: 78px; margin: -46px 0 -4px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15)); }
 .sheet .btn { width: 100%; padding: 14px; font-size: 1.05rem; }
 .fb.no .btn { background: var(--red); box-shadow: 0 4px 0 var(--red-dark); }
 .fb.no .btn:active { box-shadow: 0 1px 0 var(--red-dark); }
@@ -401,6 +396,4 @@ kbd {
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
-  /* Kiko's idle loop only swaps frames in place (no movement), so keep it. */
-  .kiko-idle img { animation: idle 3s steps(18) infinite !important; }
 }

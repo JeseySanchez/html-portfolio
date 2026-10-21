@@ -170,26 +170,66 @@
   const CHEERS = ["Nice one!", "You got it!", "Brilliant!", "Hop hop, correct!", "Your brain just got stronger!", "Yes!"];
   const NUDGES = ["Almost! Mistakes help you remember.", "Good try. You'll see this one again.", "Getting it wrong first makes it stick better!"];
 
+  // mood: "correct" or "wrong" plays that reaction, then Kiko settles back down.
   function kikoSays(text, mood = "") {
     const k = $(".coach");
     if (!k) return;
-    const bubble = $(".bubble", k), img = $(".kiko-idle", k);
+    const bubble = $(".bubble", k);
     bubble.innerHTML = text;
-    [bubble, img].forEach((el) => el.classList.remove("pop", "hop", "wobble"));
-    void img.offsetWidth;
+    bubble.classList.remove("pop");
+    void bubble.offsetWidth;
     bubble.classList.add("pop");
-    if (mood) img.classList.add(mood);
+    if (mood) play($(".kiko", k), mood);
   }
-  // Kiko's idle loop: an 18-frame sprite strip stepped through with CSS.
-  const idle = (cls = "", big = false) =>
-    `<span class="kiko-idle ${cls}" role="img" aria-label="Kiko"><img src="assets/kiko-idle${big ? "" : "-sm"}.webp" alt=""></span>`;
-  const coach = (text) => `<div class="coach">${idle()}<div class="bubble">${text}</div></div>`;
 
-  // Feedback sheet that slides up from the bottom of the screen.
+  // ---------- Kiko sprite animations ----------
+  // Each mood is a horizontal strip of frames. Large strips exist for the
+  // moods shown on hero screens, small ones for the coach and the path.
+  const ANIMS = {
+    idle: { n: 18, fps: 6, loop: true },
+    welcome: { n: 21, fps: 9, then: "idle" },
+    thinking: { n: 26, fps: 7, loop: true },
+    correct: { n: 24, fps: 14, then: "idle" },
+    wrong: { n: 24, fps: 10, then: "idle" },
+    celebrate: { n: 22, fps: 10, loop: true },
+  };
+  const spriteSrc = (anim, big) => `assets/kiko-${anim}${big ? "" : "-sm"}.webp`;
+  const kiko = (anim, cls = "", big = false) =>
+    `<span class="kiko ${cls}" data-anim="${anim}" ${big ? "data-big" : ""} role="img" aria-label="Kiko"><img alt=""></span>`;
+  const coach = (text, anim = "idle") => `<div class="coach">${kiko(anim)}<div class="bubble">${text}</div></div>`;
+
+  // Step through a strip's frames; one-off moods hand back to `then` when done.
+  function play(el, anim) {
+    if (!el) return;
+    const a = ANIMS[anim], img = $("img", el);
+    el._anim?.cancel();
+    img.src = spriteSrc(anim, el.hasAttribute("data-big"));
+    img.style.width = `${a.n * 100}%`;
+    el._anim = img.animate(
+      [{ transform: "translateX(0)" }, { transform: `translateX(-${((a.n - 1) / a.n) * 100}%)` }],
+      { duration: (a.n / a.fps) * 1000, iterations: a.loop ? Infinity : 1, easing: `steps(${a.n}, jump-none)`, fill: "forwards" }
+    );
+    if (a.then) el._anim.onfinish = () => el.isConnected && play(el, a.then);
+  }
+  // Warm the cache so switching moods never flashes an empty frame.
+  window.addEventListener("load", () => {
+    ["idle", "thinking", "correct", "wrong"].forEach((m) => (new Image().src = spriteSrc(m, false)));
+    ["idle", "celebrate"].forEach((m) => (new Image().src = spriteSrc(m, true)));
+  });
+
+  // Feedback sheet that slides up from the bottom of the screen, with Kiko
+  // reacting in it (the sheet covers the coach on small screens).
+  function showSheet(html) {
+    sheetRoot.innerHTML = html;
+    $$(".kiko[data-anim]", sheetRoot).forEach((el) => play(el, el.dataset.anim));
+  }
   const sheet = (ok, title, body = "", btn = "Continue") => `
     <div class="fb sheet ${ok ? "ok" : "no"}" role="status">
       <div class="sheet-inner">
-        <div class="sheet-text"><b>${ok ? "✓" : "✕"} ${title}</b>${body ? `<p>${body}</p>` : ""}</div>
+        <div class="sheet-head">
+          ${kiko(ok ? "correct" : "wrong", "sheet-kiko")}
+          <div class="sheet-text"><b>${ok ? "✓" : "✕"} ${title}</b>${body ? `<p>${body}</p>` : ""}</div>
+        </div>
         <button class="btn" data-act="next">${btn}</button>
       </div>
     </div>`;
@@ -247,6 +287,7 @@
     if ("speechSynthesis" in window) speechSynthesis.cancel();
     app.innerHTML = html;
     sheetRoot.innerHTML = "";
+    $$(".kiko[data-anim]", app).forEach((el) => play(el, el.dataset.anim));
     app.classList.remove("enter");
     void app.offsetWidth;
     app.classList.add("enter");
@@ -258,7 +299,7 @@
   function showWelcome() {
     screen(`
       <section class="welcome">
-        <div class="hero-wrap">${idle("hero-idle", true)}</div>
+        <div class="hero-wrap">${kiko("welcome", "hero-sprite float", true)}</div>
         <h1>Hi, I'm <span class="brand">Kiko</span>!</h1>
         <p class="lead">I'll teach you a new language using <b>methods backed by learning science</b>, one small task at a time.</p>
         <h2>What do you want to learn?</h2>
@@ -314,7 +355,7 @@
             <button data-task="${i}" ${s === "locked" ? "disabled" : ""} aria-label="${esc(t.title)}">
               <span class="node-icon">${s === "done" ? "✓" : s === "locked" ? "🔒" : t.icon}</span>
             </button>
-            ${i === next ? idle("node-kiko") : ""}
+            ${i === next ? kiko("idle", "node-kiko") : ""}
             <div class="node-label"><b>${i + 1}. ${esc(t.title)}</b><small>${esc(t.technique)}</small></div>
           </li>`;
         }).join("")}
@@ -361,7 +402,7 @@
     gain(xp);
     screen(`
       <section class="done-screen">
-        <div class="hero-wrap"><img class="hero-kiko cheer" src="assets/kiko.png" alt="Kiko celebrating"></div>
+        <div class="hero-wrap">${kiko("celebrate", "hero-sprite", true)}</div>
         <h1>${title}</h1>
         <div class="stats">
           <div class="stat"><b class="count" data-n="${xp}">0</b><small>XP earned</small></div>
@@ -531,7 +572,7 @@
             : `<form id="typed"><input class="input big" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type your answer"><button class="btn big">Check</button></form>`}
           <div id="fb"></div>
         </section>
-        ${coach(retried.has(q) ? "This one again. Try to recall it!" : "Try to answer <b>before</b> you look at the options.")}`);
+        ${coach(retried.has(q) ? "This one again. Try to recall it!" : "Try to answer <b>before</b> you look at the options.", "thinking")}`);
       bindQuit();
       if (q.say) { speak(q.say); $$("[data-act=say]").forEach((b) => b.addEventListener("click", () => speak(q.say))); }
       if (q.options) $$(".opt").forEach((b) => b.addEventListener("click", () => grade(b.dataset.o === q.answer, b)));
@@ -567,8 +608,8 @@
       }
       const reveal = q.kind === "toEn" || q.kind === "phrase" ? `${q.prompt} = ${q.answer}` : `${q.answer}${q.kind === "listen" ? ` = ${meaningOf(q.answer)}` : q.prompt ? ` = ${q.prompt}` : ""}`;
       const title = ok ? (combo >= 3 ? `${combo} in a row!` : one(["Correct!", "Nice!", "Great!"])) : "Not quite";
-      sheetRoot.innerHTML = sheet(ok, title, `${note ? `${note} ` : ""}${esc(reveal)}`);
-      kikoSays(ok ? one(CHEERS) : one(NUDGES), ok ? "hop" : "wobble");
+      showSheet(sheet(ok, title, `${note ? `${note} ` : ""}${esc(reveal)}`));
+      kikoSays(ok ? one(CHEERS) : one(NUDGES), ok ? "correct" : "wrong");
       if (!ok || q.kind === "type" || q.kind === "toTarget") speak(q.kind === "toEn" || q.kind === "phrase" ? q.prompt : q.answer);
       $("[data-act=next]").focus();
       $("[data-act=next]").addEventListener("click", () => {
@@ -688,7 +729,7 @@
         const said = e.results[0][0].transcript;
         const ok = similarity(said, target) >= 0.6;
         $("#fb").innerHTML = `<div class="fb inline ${ok ? "ok" : "no"}"><b>${ok ? "Sounds great!" : "Let's try once more"}</b><p>Kiko heard: “${esc(said)}”</p></div>`;
-        kikoSays(ok ? one(CHEERS) : "Listen again on 🐢 slow, then copy it.", ok ? "hop" : "wobble");
+        kikoSays(ok ? one(CHEERS) : "Listen again on 🐢 slow, then copy it.", ok ? "correct" : "wrong");
         if (ok) {
           gain(2); sfx.right(); confetti(18, centerOf(mic));
           const nb = $("[data-act=next]"); nb.textContent = "Next"; nb.classList.remove("ghost");
@@ -756,15 +797,15 @@
             <div class="options">${order.map(([o, k], j) => `<button class="opt" data-k="${k}" style="--i:${j}"><kbd>${j + 1}</kbd>${esc(o)}</button>`).join("")}</div>
             <div id="fb"></div>
           </section>
-          ${coach("Understanding the message is what matters most.")}`);
+          ${coach("Understanding the message is what matters most.", "thinking")}`);
         bindQuit();
         $$(".opt").forEach((b) => b.addEventListener("click", () => {
           const ok = +b.dataset.k === a;
           $$(".opt").forEach((x) => { x.disabled = true; if (+x.dataset.k === a) x.classList.add("right"); });
           if (ok) { right++; gain(2); sfx.right(); confetti(18, centerOf(b)); }
           else { b.classList.add("wrong"); sfx.wrong(); }
-          kikoSays(ok ? one(CHEERS) : one(NUDGES), ok ? "hop" : "wobble");
-          sheetRoot.innerHTML = sheet(ok, ok ? "Correct!" : "Not quite", ok ? "" : `Answer: ${esc(opts[a])}`);
+          kikoSays(ok ? one(CHEERS) : one(NUDGES), ok ? "correct" : "wrong");
+          showSheet(sheet(ok, ok ? "Correct!" : "Not quite", ok ? "" : `Answer: ${esc(opts[a])}`));
           $("[data-act=next]").focus();
           $("[data-act=next]").addEventListener("click", () => {
             if (++n < s.questions.length) show();
@@ -798,7 +839,7 @@
           <button class="btn big" data-act="check" disabled>Check</button>
           <div id="fb"></div>
         </section>
-        ${coach("Two of the tiles are decoys. Think about word order!")}`);
+        ${coach("Two of the tiles are decoys. Think about word order!", "thinking")}`);
       bindQuit();
       const line = $("#line"), check = $("[data-act=check]");
       const redraw = () => {
@@ -835,8 +876,8 @@
           sfx.wrong();
           line.classList.add("shake");
         }
-        sheetRoot.innerHTML = sheet(ok, ok ? "Perfect sentence!" : "Close! The answer is:", esc(target));
-        kikoSays(ok ? "Now read it out loud! 🗣️" : "Look at where each word goes. Word order is the tricky part.", ok ? "hop" : "wobble");
+        showSheet(sheet(ok, ok ? "Perfect sentence!" : "Close! The answer is:", esc(target)));
+        kikoSays(ok ? "Now read it out loud! 🗣️" : "Look at where each word goes. Word order is the tricky part.", ok ? "correct" : "wrong");
         speak(target);
         $("[data-act=next]").focus();
         $("[data-act=next]").addEventListener("click", () => {
