@@ -23,6 +23,7 @@ Kiko is a language-learning web app that teaches you **how** to learn a language
 - **Audio.** Words and phrases are read aloud with the browser's built-in speech. Where the browser supports it (Chrome, Edge, Safari), you can also speak into the microphone to check your shadowing.
 - **Tap-to-translate story.** Tap any word for its meaning, or show the English for a whole sentence.
 - **Progress.** XP, a day streak and progress through the path are saved in your browser's `localStorage`.
+- **Kiko idles.** An 18-frame sprite loop (`assets/kiko-idle*.webp`) has Kiko blinking, winking and flopping their ears on the welcome screen, beside every hint and on the learning path.
 - **Animations.** Flashcards flip in 3D, review cards fly off once rated, confetti bursts for right answers, wrong answers shake, sentence tiles glide into place, and Kiko hops along the path. All motion is switched off if your device is set to reduce motion.
 - **Sound effects.** Short tones are generated in the browser, so there are no audio files. Tap 🔈 to mute.
 - **Keyboard shortcuts** (on computers): `1`–`4` pick an answer or a rating, `Space` flips a card, and `Enter` continues.

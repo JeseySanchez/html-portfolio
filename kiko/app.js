@@ -173,14 +173,17 @@
   function kikoSays(text, mood = "") {
     const k = $(".coach");
     if (!k) return;
-    const bubble = $(".bubble", k), img = $("img", k);
+    const bubble = $(".bubble", k), img = $(".kiko-idle", k);
     bubble.innerHTML = text;
     [bubble, img].forEach((el) => el.classList.remove("pop", "hop", "wobble"));
     void img.offsetWidth;
     bubble.classList.add("pop");
     if (mood) img.classList.add(mood);
   }
-  const coach = (text) => `<div class="coach"><img src="assets/kiko-192.png" alt="Kiko"><div class="bubble">${text}</div></div>`;
+  // Kiko's idle loop: an 18-frame sprite strip stepped through with CSS.
+  const idle = (cls = "", big = false) =>
+    `<span class="kiko-idle ${cls}" role="img" aria-label="Kiko"><img src="assets/kiko-idle${big ? "" : "-sm"}.webp" alt=""></span>`;
+  const coach = (text) => `<div class="coach">${idle()}<div class="bubble">${text}</div></div>`;
 
   // Feedback sheet that slides up from the bottom of the screen.
   const sheet = (ok, title, body = "", btn = "Continue") => `
@@ -255,7 +258,7 @@
   function showWelcome() {
     screen(`
       <section class="welcome">
-        <div class="hero-wrap"><img class="hero-kiko" src="assets/kiko.png" alt="Kiko the bunny with a green backpack"></div>
+        <div class="hero-wrap">${idle("hero-idle", true)}</div>
         <h1>Hi, I'm <span class="brand">Kiko</span>!</h1>
         <p class="lead">I'll teach you a new language using <b>methods backed by learning science</b>, one small task at a time.</p>
         <h2>What do you want to learn?</h2>
@@ -311,7 +314,7 @@
             <button data-task="${i}" ${s === "locked" ? "disabled" : ""} aria-label="${esc(t.title)}">
               <span class="node-icon">${s === "done" ? "✓" : s === "locked" ? "🔒" : t.icon}</span>
             </button>
-            ${i === next ? `<img class="node-kiko" src="assets/kiko-192.png" alt="">` : ""}
+            ${i === next ? idle("node-kiko") : ""}
             <div class="node-label"><b>${i + 1}. ${esc(t.title)}</b><small>${esc(t.technique)}</small></div>
           </li>`;
         }).join("")}
