@@ -141,6 +141,7 @@ kbd {
 /* Kiko sprite: a strip of 250×300 frames; app.js steps it one frame at a time. */
 .kiko { display: inline-block; flex: none; overflow: hidden; aspect-ratio: 5 / 6; }
 .kiko img { display: block; height: 100%; max-width: none; }
+.kiko:not(.ready) img { visibility: hidden; } /* until its first strip has loaded */
 .coach .kiko { width: 84px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.12)); }
 .bubble {
   position: relative; background: var(--surface); border: 2px solid var(--line);

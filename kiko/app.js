@@ -2,7 +2,21 @@
 (() => {
   "use strict";
 
+  // Bump together with version.json and the ?v= links in index.html.
+  const APP_VERSION = "8";
   const STORE_KEY = "kiko-v1";
+
+  // GitHub Pages lets browsers cache index.html too, so a returning visitor
+  // can be stuck on old code. version.json is fetched uncached; if it's newer,
+  // reload at a fresh URL, which bypasses the stale cached page.
+  fetch(`version.json?t=${Date.now()}`, { cache: "no-store" })
+    .then((r) => r.json())
+    .then(({ v }) => {
+      if (v && v !== APP_VERSION && new URLSearchParams(location.search).get("v") !== v) {
+        location.replace(`${location.pathname}?v=${v}`);
+      }
+    })
+    .catch(() => {});
   const DAY = 24 * 60 * 60 * 1000;
   const app = document.getElementById("app");
   const hud = document.getElementById("hud");
@@ -193,28 +207,62 @@
     wrong: { n: 24, fps: 10, then: "idle" },
     celebrate: { n: 22, fps: 10, loop: true },
   };
-  const spriteSrc = (anim, big) => `assets/kiko-${anim}${big ? "" : "-sm"}.webp`;
+  const spriteSrc = (anim, big) => `assets/kiko-${anim}${big ? "" : "-sm"}.webp?v=${APP_VERSION}`;
   const kiko = (anim, cls = "", big = false) =>
     `<span class="kiko ${cls}" data-anim="${anim}" ${big ? "data-big" : ""} role="img" aria-label="Kiko"><img alt=""></span>`;
   const coach = (text, anim = "idle") => `<div class="coach">${kiko(anim)}<div class="bubble">${text}</div></div>`;
 
-  // Step through a strip's frames; one-off moods hand back to `then` when done.
+  // Decoded strips, so a mood only starts once its whole image is ready.
+  const strips = {};
+  function strip(src) {
+    if (!strips[src]) {
+      const im = new Image();
+      im.src = src;
+      strips[src] = (im.decode ? im.decode() : new Promise((r) => (im.onload = r))).catch(() => {});
+    }
+    return strips[src];
+  }
+
+  // A single timer sets each sprite's frame directly (no CSS/WAAPI step
+  // easing, which browsers support unevenly). One-off moods hand back to
+  // `then` once their last frame has shown.
+  const players = new Set();
   function play(el, anim) {
     if (!el) return;
-    const a = ANIMS[anim], img = $("img", el);
-    el._anim?.cancel();
-    img.src = spriteSrc(anim, el.hasAttribute("data-big"));
-    img.style.width = `${a.n * 100}%`;
-    el._anim = img.animate(
-      [{ transform: "translateX(0)" }, { transform: `translateX(-${((a.n - 1) / a.n) * 100}%)` }],
-      { duration: (a.n / a.fps) * 1000, iterations: a.loop ? Infinity : 1, easing: `steps(${a.n}, jump-none)`, fill: "forwards" }
-    );
-    if (a.then) el._anim.onfinish = () => el.isConnected && play(el, a.then);
+    const a = ANIMS[anim], img = $("img", el), src = spriteSrc(anim, el.hasAttribute("data-big"));
+    const token = (el._token = {});
+    strip(src).then(() => {
+      if (el._token !== token) return; // a newer mood took over
+      img.src = src;
+      img.style.width = `${a.n * 100}%`;
+      img.style.transform = "translateX(0)";
+      el._kiko = { a, start: performance.now(), frame: 0 };
+      players.add(el);
+      el.classList.add("ready");
+    });
   }
-  // Warm the cache so switching moods never flashes an empty frame.
+  (function tick(now) {
+    for (const el of players) {
+      if (!el.isConnected) { players.delete(el); continue; }
+      const k = el._kiko;
+      let f = Math.floor(((now - k.start) * k.a.fps) / 1000);
+      if (!k.a.loop && f >= k.a.n) {
+        players.delete(el);
+        play(el, k.a.then);
+        continue;
+      }
+      f %= k.a.n;
+      if (f !== k.frame) {
+        k.frame = f;
+        $("img", el).style.transform = `translateX(${(-f * 100) / k.a.n}%)`;
+      }
+    }
+    requestAnimationFrame(tick);
+  })(performance.now());
+  // Warm the cache for the moods the coach switches between.
   window.addEventListener("load", () => {
-    ["idle", "thinking", "correct", "wrong"].forEach((m) => (new Image().src = spriteSrc(m, false)));
-    ["idle", "celebrate"].forEach((m) => (new Image().src = spriteSrc(m, true)));
+    ["idle", "thinking", "correct", "wrong"].forEach((m) => strip(spriteSrc(m, false)));
+    ["idle", "celebrate"].forEach((m) => strip(spriteSrc(m, true)));
   });
 
   // Feedback sheet that slides up from the bottom of the screen, with Kiko
