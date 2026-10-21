@@ -401,4 +401,6 @@ kbd {
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  /* Kiko's idle loop only swaps frames in place (no movement), so keep it. */
+  .kiko-idle img { animation: idle 3s steps(18) infinite !important; }
 }
