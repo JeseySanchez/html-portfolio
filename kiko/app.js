@@ -3,7 +3,7 @@
   "use strict";
 
   // Bump together with version.json and the ?v= links in index.html.
-  const APP_VERSION = "9";
+  const APP_VERSION = "10";
   const STORE_KEY = "kiko-v1";
 
   // GitHub Pages lets browsers cache index.html too, so a returning visitor
@@ -45,22 +45,80 @@
   }
   const L = () => LANGUAGES[state.lang];
 
-  const today = () => new Date().toISOString().slice(0, 10);
-  function bumpStreak() {
-    const t = today();
-    if (state.streak.last === t) return false;
-    const y = new Date(Date.now() - DAY).toISOString().slice(0, 10);
-    state.streak.count = state.streak.last === y ? state.streak.count + 1 : 1;
-    state.streak.last = t;
-    return true;
+  // ---------- Streak ----------
+  // Days are local calendar dates ("YYYY-MM-DD"), so the streak rolls over at
+  // the learner's midnight, not UTC's.
+  const dayKey = (d = new Date()) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const today = () => dayKey();
+  const daysBetween = (a, b) => Math.round((new Date(`${b}T12:00`) - new Date(`${a}T12:00`)) / DAY);
+  const MILESTONES = [3, 7, 14, 30, 50, 100, 200, 365];
+  const MAX_FREEZES = 2;
+  function streak() {
+    const s = state.streak;
+    s.longest ??= s.count;
+    s.freezes ??= 0;
+    s.days ??= s.last ? [s.last] : [];
+    s.frozen ??= [];
+    return s;
   }
-  // Award XP, update the streak, and animate the HUD.
-  function gain(n) {
+  // A streak survives missed days as long as there are freezes to cover them.
+  function currentStreak() {
+    const s = streak();
+    if (!s.last) return 0;
+    const gap = daysBetween(s.last, today());
+    return gap <= 1 || gap - 1 <= s.freezes ? s.count : 0;
+  }
+  const practisedToday = () => streak().last === today();
+  // Record today's practice. Returns what changed (for the celebration), or
+  // null if today was already counted.
+  function bumpStreak() {
+    const s = streak(), t = today();
+    if (s.last === t) return null;
+    const gap = s.last ? daysBetween(s.last, t) : Infinity;
+    const news = { usedFreezes: 0, earnedFreeze: false, milestone: null };
+    if (gap === 1) s.count += 1;
+    else if (gap - 1 <= s.freezes) {
+      news.usedFreezes = gap - 1;
+      s.freezes -= gap - 1;
+      for (let k = 1; k < gap; k++) s.frozen.push(dayKey(new Date(Date.now() - k * DAY)));
+      s.count += 1;
+    } else s.count = 1;
+    s.last = t;
+    s.days = [...s.days, t].slice(-120);
+    s.frozen = s.frozen.slice(-30);
+    s.longest = Math.max(s.longest, s.count);
+    if (s.count % 7 === 0 && s.freezes < MAX_FREEZES) { s.freezes += 1; news.earnedFreeze = true; }
+    if (MILESTONES.includes(s.count)) news.milestone = s.count;
+    news.count = s.count;
+    return news;
+  }
+  // The last seven days, oldest first, for the streak calendar.
+  function weekRow() {
+    const s = streak();
+    const cells = [];
+    for (let k = 6; k >= 0; k--) {
+      const d = new Date(Date.now() - k * DAY), key = dayKey(d);
+      const status = s.days.includes(key) ? "done" : s.frozen.includes(key) ? "frozen" : k === 0 ? "today" : "missed";
+      const mark = { done: "🔥", frozen: "❄️", today: "", missed: "" }[status];
+      cells.push(`<div class="day ${status}"><span>${mark}</span><small>${d.toLocaleDateString(undefined, { weekday: "narrow" })}</small></div>`);
+    }
+    return `<div class="week">${cells.join("")}</div>`;
+  }
+
+  // Award XP, update the streak, and animate the HUD. The first practice of
+  // the day extends the streak; that news is shown on the next celebration.
+  let streakNews = null;
+  function gain(n, quiet = false) {
     state.xp += n;
-    const lit = bumpStreak();
+    const news = bumpStreak();
     save();
     bump("[data-xp]", `+${n} XP`);
-    if (lit) bump("[data-streak]", "🔥");
+    if (news) {
+      streakNews = news;
+      bump("[data-streak]", "🔥");
+      if (!quiet) toast(`🔥 ${news.count}-day streak!`);
+    }
   }
 
   // ---------- Helpers ----------
@@ -87,6 +145,52 @@
   if ("speechSynthesis" in window) speechSynthesis.getVoices();
 
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // Listen once in the course language; resolves with everything the
+  // recogniser thinks it heard (best guess first).
+  function listen() {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const rec = new Recognition();
+      rec.lang = L().tts;
+      rec.interimResults = false;
+      rec.maxAlternatives = 5;
+      rec.onresult = (e) => { settled = true; resolve([...e.results[0]].map((a) => a.transcript)); };
+      rec.onerror = (e) => { settled = true; reject(e.error || "error"); };
+      rec.onend = () => { if (!settled) reject("no-speech"); };
+      try { rec.start(); } catch { reject("start"); }
+      setTimeout(() => { if (!settled) try { rec.stop(); } catch {} }, 7000);
+    });
+  }
+  const MIC_ERRORS = {
+    "not-allowed": "Kiko needs your microphone. Allow the mic for this site in your browser settings, or tap \"Can't speak now\".",
+    "service-not-allowed": "Speech recognition is turned off on this device. Tap \"Can't speak now\" to practise without it.",
+    "audio-capture": "Kiko couldn't find a microphone.",
+    network: "Speech recognition needs an internet connection.",
+    "no-speech": "Kiko didn't hear anything. Tap the mic and try again.",
+  };
+  const micError = (code) => MIC_ERRORS[code] || "Something went wrong with the mic. Try again.";
+
+  const norm = (s) => fold(clean(s)).replace(/[^\p{L}\p{N}' ]/gu, "").trim();
+  function editDistance(a, b) {
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++)
+      for (let j = 1; j <= b.length; j++)
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return d[a.length][b.length];
+  }
+  // Did the learner say `target`? Accepts it inside a short phrase ("el amigo")
+  // and small recognition slips on longer words; short words must match exactly.
+  function heard(alternatives, target) {
+    const t = norm(target);
+    const slack = t.length <= 3 ? 0 : Math.max(1, Math.floor(t.length / 4));
+    return alternatives.some((alt) => {
+      const a = norm(alt);
+      if (a === t || ` ${a} `.includes(` ${t} `)) return true;
+      return [a, ...a.split(" ")].some((w) => editDistance(w, t) <= slack);
+    });
+  }
 
   // Similarity between what was said and the target, 0..1 (word-level).
   function similarity(said, target) {
@@ -141,6 +245,17 @@
     setTimeout(() => layer.remove(), 1600);
   }
   const centerOf = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+
+  // Brief message that drops in at the top of the screen.
+  function toast(text) {
+    const t = document.createElement("div");
+    t.className = "toast";
+    t.setAttribute("role", "status");
+    t.textContent = text;
+    document.body.append(t);
+    setTimeout(() => t.classList.add("out"), 2400);
+    setTimeout(() => t.remove(), 2800);
+  }
 
   // Pop a HUD chip and float a label out of it.
   function bump(sel, label) {
@@ -308,7 +423,7 @@
     const done = prog().done.length;
     hud.innerHTML = `
       <button class="hud-chip" data-act="lang" title="Change language">${L().flag}</button>
-      <span class="hud-chip" data-streak title="Day streak">🔥 ${state.streak.count}</span>
+      <button class="hud-chip ${practisedToday() ? "" : "cold"}" data-streak data-act="streak" title="Your streak">🔥 ${currentStreak()}</button>
       <span class="hud-chip" data-xp title="Experience points">⭐ ${state.xp}</span>
       <button class="hud-chip icon" data-act="mute" title="${state.muted ? "Turn sounds on" : "Turn sounds off"}" aria-label="${state.muted ? "Unmute" : "Mute"}">${state.muted ? "🔇" : "🔈"}</button>
       <div class="hud-bar" title="${done} of ${TASKS.length} tasks"><span style="width:${(done / TASKS.length) * 100}%"></span></div>`;
@@ -317,6 +432,127 @@
     if (e.target.closest("[data-act=lang]")) showWelcome();
     if (e.target.closest("[data-act=mute]")) { state.muted = !state.muted; save(); sfx.tap(); }
   });
+  // Buttons that can appear on any screen (celebrations, home, the plan task).
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-act=streak]")) showStreakPanel();
+    if (e.target.closest("[data-act=calendar]")) downloadReminder();
+  });
+
+  // ---------- Streak panel ----------
+  function showStreakPanel() {
+    sfx.tap();
+    const s = streak(), n = currentStreak();
+    const next = MILESTONES.find((m) => m > n) || n + 1;
+    const prev = [...MILESTONES].reverse().find((m) => m <= n) || 0;
+    const status = practisedToday()
+      ? "You've practised today. See you tomorrow! 🐰"
+      : n ? "Practise today to keep your streak going." : "Finish any task to start a streak.";
+    const r = reminder();
+    const notifyState = !("Notification" in window) ? "unsupported" : Notification.permission;
+    const modal = document.createElement("div");
+    modal.className = "modal";
+    modal.innerHTML = `
+      <div class="modal-card" role="dialog" aria-modal="true" aria-label="Your streak">
+        <button class="modal-close" data-close aria-label="Close">✕</button>
+        <div class="streak-hero">
+          <span class="flame ${practisedToday() ? "lit" : ""}">🔥</span>
+          <div><b>${n}</b><small>day streak</small></div>
+        </div>
+        <p class="center">${status}</p>
+        ${weekRow()}
+        <div class="streak-stats">
+          <div><b>${s.longest}</b><small>longest streak</small></div>
+          <div><b>❄️ ${s.freezes}/${MAX_FREEZES}</b><small>streak freezes</small></div>
+        </div>
+        <div class="milestone">
+          <div class="milestone-label"><span>Next milestone</span><b>${next} days</b></div>
+          <div class="hud-bar wide"><span style="width:${((n - prev) / (next - prev)) * 100}%"></span></div>
+          <small class="muted">${next - n} more day${next - n === 1 ? "" : "s"} to go</small>
+        </div>
+        <p class="muted small">You earn a streak freeze for every 7 days in a row (up to ${MAX_FREEZES}). If you miss a day, one is used automatically so your streak survives.</p>
+        <h3>⏰ Daily reminder</h3>
+        <label class="field inline">Remind me at <input type="time" id="remTime" class="input" value="${r.time}"></label>
+        <button class="btn big" data-act="calendar">📅 Add to my calendar</button>
+        <p class="muted small">Creates a repeating daily event with an alert. This is the most reliable reminder, especially on iPhone.</p>
+        ${notifyState === "unsupported" ? "" : `
+        <label class="check"><input type="checkbox" id="remNotify" ${r.notify && notifyState === "granted" ? "checked" : ""} ${notifyState === "denied" ? "disabled" : ""}>
+          Also notify me in this browser</label>
+        <p class="muted small">${notifyState === "denied" ? "Notifications are blocked for this site in your browser settings." : "Browser reminders only arrive while Kiko is open in a tab."}</p>`}
+      </div>`;
+    document.body.append(modal);
+    const close = () => { modal.classList.add("closing"); setTimeout(() => modal.remove(), 200); };
+    modal.addEventListener("click", (e) => { if (e.target === modal || e.target.closest("[data-close]")) close(); });
+    document.addEventListener("keydown", function esc(e) { if (e.key === "Escape") { close(); document.removeEventListener("keydown", esc); } });
+    $("#remTime", modal).addEventListener("change", (e) => { reminder().time = e.target.value || "19:00"; save(); });
+    $("#remNotify", modal)?.addEventListener("change", async (e) => {
+      if (e.target.checked && Notification.permission !== "granted") {
+        const p = await Notification.requestPermission();
+        if (p !== "granted") e.target.checked = false;
+      }
+      reminder().notify = e.target.checked;
+      save();
+    });
+    $(".modal-close", modal).focus();
+  }
+
+  // ---------- Daily reminder ----------
+  function reminder() {
+    state.reminder ??= { time: "19:00", notify: false, lastNotified: null };
+    return state.reminder;
+  }
+  const reminderPassed = () => {
+    const [h, m] = reminder().time.split(":").map(Number);
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes() >= h * 60 + m;
+  };
+  const formatTime = (hhmm) => {
+    const [h, m] = hhmm.split(":").map(Number);
+    return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  };
+  // A repeating calendar event is the one reminder that works even when the
+  // app is closed (websites can't schedule notifications on their own).
+  function downloadReminder() {
+    const [h, m] = reminder().time.split(":");
+    const url = location.origin + location.pathname;
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
+    const ics = [
+      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Kiko//Daily practice//EN", "CALSCALE:GREGORIAN",
+      "BEGIN:VEVENT",
+      `UID:kiko-daily-${Date.now()}@kiko`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${today().replace(/-/g, "")}T${h}${m}00`,
+      "DURATION:PT10M",
+      "RRULE:FREQ=DAILY",
+      `SUMMARY:Practise ${state.lang ? L().name : "languages"} with Kiko 🐰`,
+      `DESCRIPTION:A few minutes a day keeps your streak alive. ${url}`,
+      `URL:${url}`,
+      "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Time to practise with Kiko!", "TRIGGER:PT0M", "END:VALARM",
+      "END:VEVENT", "END:VCALENDAR",
+    ].join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+    a.download = "kiko-daily-reminder.ics";
+    document.body.append(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast("📅 Open the file to add the reminder to your calendar");
+  }
+  // While Kiko is open, nudge with a notification once the reminder time passes.
+  function checkReminder() {
+    const r = reminder();
+    if (!r.notify || !("Notification" in window) || Notification.permission !== "granted") return;
+    if (practisedToday() || !reminderPassed() || r.lastNotified === today()) return;
+    try {
+      const n = currentStreak();
+      new Notification("Time to practise with Kiko 🐰", {
+        body: n ? `Keep your ${n}-day streak going with a quick task.` : "A few minutes today makes a big difference.",
+        icon: "assets/kiko-192.png",
+      });
+      r.lastNotified = today();
+      save();
+    } catch {} // some mobile browsers only allow notifications from a service worker
+  }
+  setInterval(checkReminder, 60 * 1000);
   document.getElementById("logo").addEventListener("click", () => state.lang ? showHome() : showWelcome());
 
   // Progress bars animate from where the previous screen left them.
@@ -371,13 +607,24 @@
     const total = Object.keys(p.cards).length;
     const next = TASKS.findIndex((_, i) => taskState(i) === "open");
     const greeting = next === -1
-      ? "You finished the whole path! Come back every day for your reviews. 🌙"
+      ? "You finished all three units! Come back every day for your reviews. 🌙"
       : p.done.length === 0
         ? `Let's start learning ${L().name}! Tap the first task.`
         : `Next up: <b>${TASKS[next].title}</b>.`;
 
+    // Nudge to protect the streak, more urgently once the reminder time passes.
+    const n = currentStreak();
+    const nudge = practisedToday() || !p.done.length ? "" : `
+      <button class="nudge card ${reminderPassed() ? "urgent" : ""}" data-act="streak">
+        <span class="flame">🔥</span>
+        <span>${reminderPassed()
+          ? `It's past your ${formatTime(reminder().time)} practice time. ${n ? `Do one task to keep your <b>${n}-day streak</b>!` : "A few minutes will start a new streak!"}`
+          : n ? `Practise today to keep your <b>${n}-day streak</b> going.` : "Practise today to start a new streak."}</span>
+      </button>`;
+
     screen(`
       ${coach(greeting)}
+      ${nudge}
       ${total ? `
       <div class="daily card ${due ? "due" : ""}">
         <div>
@@ -389,8 +636,11 @@
       </div>` : ""}
       <ol class="path">
         ${TASKS.map((t, i) => {
-          const s = taskState(i);
-          return `<li class="node ${s} ${i === next ? "current" : ""}" style="--x:${[0, 1, 2, 1][i % 4]};--i:${i}">
+          const s = taskState(i), u = t.unit || 1;
+          const head = i === 0 || (TASKS[i - 1].unit || 1) !== u
+            ? `<li class="unit-head" style="--i:${i}"><span>${UNITS[u].icon}</span><div><small>Unit ${u}</small><b>${UNITS[u].title}</b></div></li>`
+            : "";
+          return `${head}<li class="node ${s} ${i === next ? "current" : ""}" style="--x:${[0, 1, 2, 1][i % 4]};--i:${i}">
             <button data-task="${i}" ${s === "locked" ? "disabled" : ""} aria-label="${esc(t.title)}">
               <span class="node-icon">${s === "done" ? "✓" : s === "locked" ? "🔒" : t.icon}</span>
             </button>
@@ -403,7 +653,7 @@
     `);
     $$("[data-task]").forEach((b) => b.addEventListener("click", () => { sfx.tap(); showIntro(+b.dataset.task); }));
     $("[data-act=review]")?.addEventListener("click", () => runReview(null, true));
-    $("[data-act=practice]")?.addEventListener("click", () => runQuiz({ batches: [0, 1, 2], mixed: true }, null));
+    $("[data-act=practice]")?.addEventListener("click", () => runQuiz({ batches: [0, 1, 2, 3, 4, 5, 6, 7], mixed: true }, null));
     // Keep the current task in view on long paths.
     $(".node.current")?.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
   }
@@ -431,29 +681,39 @@
 
   function startTask(i) {
     const t = TASKS[i];
-    const runners = { plan: runPlan, learn: runLearn, quiz: runQuiz, review: runReview, shadow: runShadow, story: runStory, build: runBuild, finish: runFinish };
+    const runners = { plan: runPlan, learn: runLearn, quiz: runQuiz, review: runReview, shadow: runShadow, speak: runSpeak, story: runStory, build: runBuild, finish: runFinish };
     runners[t.type](t, i);
   }
 
   // Shared celebration screen. `i` is a task index, or null for free practice.
   function celebrate(title, xp, extra, i = null) {
     const t = i === null ? null : TASKS[i];
-    gain(xp);
+    gain(xp, true);
+    const news = streakNews;
+    streakNews = null;
+    const streakCard = news ? `
+        <button class="streak-card card" data-act="streak">
+          <span class="flame lit">🔥</span>
+          <span><b>${news.milestone ? `${news.count}-day milestone! 🎉` : news.count === 1 ? "Streak started!" : `${news.count}-day streak!`}</b>
+          <small>${news.usedFreezes ? `A streak freeze saved your streak ❄️` : news.earnedFreeze ? "You earned a streak freeze ❄️" : "Come back tomorrow to keep it going."}</small></span>
+        </button>
+        ${weekRow()}` : "";
     screen(`
       <section class="done-screen">
         <div class="hero-wrap">${kiko("celebrate", "hero-sprite")}</div>
         <h1>${title}</h1>
         <div class="stats">
           <div class="stat"><b class="count" data-n="${xp}">0</b><small>XP earned</small></div>
-          <div class="stat"><b>🔥 ${state.streak.count}</b><small>day streak</small></div>
+          <div class="stat"><b>🔥 ${currentStreak()}</b><small>day streak</small></div>
         </div>
+        ${streakCard}
         ${extra}
         ${t ? `<div class="science card small"><span class="chip">🔬 You just used</span><p><b>${esc(t.technique)}</b></p></div>` : ""}
         <button class="btn big" data-act="home">Continue</button>
       </section>`);
     countUp($(".count"), xp);
     sfx.win();
-    setTimeout(() => confetti(60), 150);
+    setTimeout(() => confetti(news?.milestone ? 120 : 60), 150);
     $("[data-act=home]").addEventListener("click", showHome);
   }
 
@@ -508,6 +768,7 @@
         <label class="field">…I will practise ${L().name} with Kiko for
           <div class="seg" id="mins">${[5, 10, 15, 20].map((m) => `<button data-m="${m}" class="${m === 10 ? "on" : ""}">${m} min</button>`).join("")}</div>
         </label>
+        <label class="field inline">Remind me at <input type="time" id="planTime" class="input" value="${reminder().time}"></label>
         <div class="plan-preview card" id="preview"></div>
         <button class="btn big" data-act="save">Commit to my plan</button>
       </section>
@@ -529,8 +790,12 @@
     }));
     upd();
     $("[data-act=save]").addEventListener("click", () => {
-      prog().plan = text(); save();
-      completeTask(i, `<div class="card plan-preview"><p class="plan-text">${esc(text())}</p></div>`);
+      prog().plan = text();
+      reminder().time = $("#planTime").value || "19:00";
+      save();
+      completeTask(i, `
+        <div class="card plan-preview"><p class="plan-text">${esc(text())}</p></div>
+        <button class="btn ghost big" data-act="calendar">📅 Add a ${formatTime(reminder().time)} reminder to my calendar</button>`);
     });
   }
 
@@ -545,6 +810,7 @@
         <section class="activity">
           <p class="eyebrow">New word ${n + 1} of ${words.length}</p>
           ${flipCard(w, m, "Guess the meaning, then tap to flip")}
+          ${Recognition ? `<button class="btn ghost big hidden" data-act="mic">🎤 Check my pronunciation</button><div id="micfb"></div>` : ""}
           <button class="btn big" data-act="next" disabled>Next</button>
           <p class="kbd-hint">Space to flip · Enter for next</p>
         </section>
@@ -558,10 +824,114 @@
         f.classList.add("flipped");
         sfx.flip();
         $("[data-act=next]").disabled = false;
+        $("[data-act=mic]")?.classList.remove("hidden");
+      });
+      $("[data-act=mic]")?.addEventListener("click", async (e) => {
+        const btn = e.currentTarget, fb = $("#micfb");
+        btn.disabled = true;
+        btn.classList.add("listening");
+        btn.textContent = "👂 Listening…";
+        try {
+          const alts = await listen();
+          const ok = heard(alts, w);
+          fb.innerHTML = `<div class="fb inline ${ok ? "ok" : "no"}"><b>${ok ? "Sounds right!" : "Not quite yet"}</b><p>Kiko heard: “${esc(alts[0])}”</p></div>`;
+          ok ? (sfx.right(), gain(1)) : (sfx.wrong(), speak(w, 0.8));
+          kikoSays(ok ? one(CHEERS) : "Listen once more, then try again.", ok ? "correct" : "wrong");
+        } catch (err) {
+          fb.innerHTML = `<div class="fb inline no"><p>${micError(err)}</p></div>`;
+        }
+        if (btn.isConnected) { btn.disabled = false; btn.classList.remove("listening"); btn.textContent = "🎤 Try again"; }
       });
       $("[data-act=next]").addEventListener("click", () => {
         if (++n < words.length) show();
         else { addCards(words); completeTask(i, `<p>🎒 ${words.length} words packed into your review deck.</p>`); }
+      });
+    };
+    show();
+  }
+
+  // ---------- Task: speak the words from memory ----------
+  function runSpeak(t, i) {
+    const items = pick(wordsInBatches(t.batches), 8);
+    const total = items.length;
+    const queue = items.slice();
+    const retried = new Set();
+    let n = 0, firstTry = 0, selfCheck = !Recognition;
+
+    const show = () => {
+      const [w, m] = queue[n];
+      let attempts = 0, hinted = false;
+      screen(`
+        ${stepBar(n, queue.length)}
+        <section class="activity">
+          <p class="eyebrow">Say it in ${L().name}${retried.has(queue[n]) ? " · one more try" : ""}</p>
+          <div class="prompt card">
+            <div class="target">${esc(m)}</div>
+            <p class="answer hidden" id="answer">${esc(w)}</p>
+          </div>
+          ${selfCheck
+            ? `<p class="mic-hint">Say the word out loud, then check yourself.</p>
+               <button class="btn big" data-act="reveal">Show me the answer</button>`
+            : `<div class="mic-wrap"><button class="mic-btn" data-act="mic" aria-label="Tap and say the word">🎤</button></div>
+               <p class="mic-hint" id="micHint">Tap the mic and say the word</p>`}
+          <div id="micfb"></div>
+          <div class="row center">
+            <button class="btn ghost" data-act="hint">🔊 Hear it</button>
+            ${selfCheck ? "" : `<button class="btn ghost" data-act="nomic">Can't speak now</button>`}
+          </div>
+        </section>
+        ${coach("Say the word <b>from memory</b>. Only tap 🔊 if you're stuck.", "thinking")}`);
+      bindQuit();
+
+      const reveal = () => { $("#answer").classList.remove("hidden"); speak(w, 0.85); };
+      $("[data-act=hint]").addEventListener("click", () => { hinted = true; reveal(); kikoSays("Now you say it! 🎤"); });
+      $("[data-act=nomic]")?.addEventListener("click", () => { selfCheck = true; show(); });
+
+      const finish = (ok, said = "") => {
+        if (ok && !hinted && attempts <= 1 && !retried.has(queue[n])) firstTry++;
+        if (ok) { gain(3); sfx.right(); confetti(18, centerOf($(".prompt"))); }
+        else { sfx.wrong(); if (!retried.has(queue[n])) { retried.add(queue[n]); queue.push(queue[n]); } }
+        reveal();
+        $$("[data-act]:not([data-act=quit])", app).forEach((b) => (b.disabled = true));
+        showSheet(sheet(ok, ok ? one(["Perfect!", "You said it!", "Great pronunciation!"]) : "Here's the word",
+          `${esc(m)} = ${esc(w)}${said ? ` · Kiko heard “${esc(said)}”` : ""}`));
+        kikoSays(ok ? one(CHEERS) : one(NUDGES), ok ? "correct" : "wrong");
+        $("[data-act=next]").focus();
+        $("[data-act=next]").addEventListener("click", () => {
+          if (++n < queue.length) show();
+          else completeTask(i, `<p class="lead">${firstTry}/${total} words said right on the first try</p><p class="muted">Saying words out loud makes them easier to remember.</p>`);
+        });
+      };
+
+      $("[data-act=reveal]")?.addEventListener("click", (e) => {
+        reveal();
+        e.currentTarget.replaceWith(Object.assign(document.createElement("div"), {
+          className: "row center",
+          innerHTML: `<button class="btn" data-act="gotit">✓ I said it right</button><button class="btn ghost" data-act="missed">✕ I missed it</button>`,
+        }));
+        $("[data-act=gotit]").addEventListener("click", () => finish(true));
+        $("[data-act=missed]").addEventListener("click", () => finish(false));
+      });
+
+      $("[data-act=mic]")?.addEventListener("click", async (e) => {
+        const btn = e.currentTarget, hint = $("#micHint"), fb = $("#micfb");
+        btn.disabled = true;
+        btn.classList.add("listening");
+        hint.textContent = "Listening…";
+        fb.innerHTML = "";
+        try {
+          const alts = await listen();
+          attempts++;
+          if (heard(alts, w)) return finish(true, alts[0]);
+          if (attempts >= 2) return finish(false, alts[0]);
+          fb.innerHTML = `<div class="fb inline no"><b>Not quite</b><p>Kiko heard “${esc(alts[0])}”. Try once more!</p></div>`;
+          sfx.wrong();
+          kikoSays("So close! Try once more, or tap 🔊 to hear it.", "wrong");
+        } catch (err) {
+          fb.innerHTML = `<div class="fb inline no"><p>${micError(err)}</p></div>`;
+          if (err === "not-allowed" || err === "service-not-allowed" || err === "audio-capture") { selfCheck = true; setTimeout(show, 2500); }
+        }
+        if (btn.isConnected) { btn.disabled = false; btn.classList.remove("listening"); hint.textContent = "Tap the mic and say the word"; }
       });
     };
     show();
@@ -669,7 +1039,7 @@
     if (daily) barFrom = 0;
     let queue = dueCards();
     if (!daily && queue.length < 10) queue = Object.keys(prog().cards); // first time: review everything learned
-    queue = shuffle(queue);
+    queue = shuffle(queue).slice(0, 20); // keep sessions short as the deck grows
     if (!queue.length) { showHome(); return; }
     const total = queue.length;
     let doneCount = 0;
@@ -730,7 +1100,7 @@
 
   // ---------- Task: shadowing ----------
   function runShadow(t, i) {
-    const phrases = L().phrases;
+    const phrases = L().phrases.slice(...(t.phrases || [0, 8]));
     let n = 0;
     const show = () => {
       const [ph, m] = phrases[n];
@@ -784,7 +1154,7 @@
 
   // ---------- Task: graded reading ----------
   function runStory(t, i) {
-    const s = L().story;
+    const s = L().stories[t.story || 0];
     const gloss = (word) => s.glossary[word.toLowerCase().replace(/^[«„“"¡¿—]+|[»“"!?.,:;—]+$/g, "")];
     screen(`
       ${stepBar(0, 2)}
@@ -858,7 +1228,7 @@
 
   // ---------- Task: sentence building ----------
   function runBuild(t, i) {
-    const items = L().builds;
+    const items = L().builds.slice(...(t.builds || [0, 4]));
     let n = 0, right = 0;
     const show = () => {
       const [en, target] = items[n];
@@ -946,12 +1316,12 @@
         <ol class="loop">${loop.map(([ic, a, b], k) => `<li class="card" style="--i:${k}"><span class="loop-ic">${ic}</span><div><b>${a}</b><small>${b}</small></div></li>`).join("")}</ol>
         ${p.plan ? `<div class="card plan-preview"><p class="muted">Your plan</p><p class="plan-text">${esc(p.plan)}</p></div>` : ""}
         <label class="check"><input type="checkbox" id="commit"> I'll show up tomorrow, even if it's only for 2 minutes.</label>
-        <button class="btn big" data-act="done" disabled>Finish the path</button>
+        <button class="btn big" data-act="done" disabled>Finish Unit 1</button>
       </section>
       ${coach("Consistency beats intensity. See you tomorrow! 🐰")}`);
     bindQuit();
     $("#commit").addEventListener("change", (e) => { $("[data-act=done]").disabled = !e.target.checked; if (e.target.checked) sfx.tap(); });
-    $("[data-act=done]").addEventListener("click", () => completeTask(i, `<p class="lead">🏅 You finished Kiko's science path in ${L().name}!</p><p class="muted">Your ${Object.keys(p.cards).length} words will come back for review at just the right time.</p>`));
+    $("[data-act=done]").addEventListener("click", () => completeTask(i, `<p class="lead">🏅 You finished Unit 1 in ${L().name}!</p><p class="muted">Units 2 and 3 are open. Your ${Object.keys(p.cards).length} words will come back for review at just the right time.</p>`));
   }
 
   // ---------- Global listeners ----------
