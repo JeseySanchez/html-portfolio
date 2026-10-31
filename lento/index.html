@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lento Reader</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Learn Spanish and French through comprehensible input: graded stories with pictures, audio and tap-to-gloss words.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;1,7..72,400&display=swap">
+<style>
+/* Layout: a slim sticky bar over one calm column; the library is a shelf per level, the reader a single 42rem reading column. */
+:root {
+  --bg: #EDF2F0; --surface: #F9FBFA; --sunk: #E1E9E6; --ink: #13302E; --muted: #55706B; --line: #CCDAD5;
+  --accent: #1D6B65; --accent-ink: #FFFFFF; --accent-soft: #D3E6E2;
+  --mark: #D39A12; --mark-bg: #F8DB86; --mark-fg: #3A2A00;
+  --good: #2A774A; --bad: #AE3F2A;
+  --f-ui: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --f-read: "Literata", Georgia, "Times New Roman", serif;
+  --r: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0C1615; --surface: #13201E; --sunk: #0A1211; --ink: #E0EAE7; --muted: #8DA39E; --line: #233431;
+    --accent: #5BC0B5; --accent-ink: #052320; --accent-soft: #173B37;
+    --mark: #E8B53E; --mark-bg: #5A4513; --mark-fg: #FCE8B2;
+    --good: #5DC48B; --bad: #EE8B74; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0C1615; --surface: #13201E; --sunk: #0A1211; --ink: #E0EAE7; --muted: #8DA39E; --line: #233431;
+  --accent: #5BC0B5; --accent-ink: #052320; --accent-soft: #173B37;
+  --mark: #E8B53E; --mark-bg: #5A4513; --mark-fg: #FCE8B2;
+  --good: #5DC48B; --bad: #EE8B74; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); font-size: 15px; line-height: 1.5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+a { color: inherit; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.1; }
+p { margin: 0; }
+
+.wrap { max-width: 68rem; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* top bar */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.bar .wrap { display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap; padding-block: 10px; }
+.brand { font-weight: 800; font-size: 1.45rem; letter-spacing: -0.03em; text-decoration: none; display: flex; align-items: baseline; gap: 2px; }
+.brand i { font-style: normal; color: var(--mark); }
+.nav { display: flex; gap: 4px; margin-right: auto; }
+.nav a { text-decoration: none; padding: 6px 12px; border-radius: 999px; color: var(--muted); font-weight: 600; }
+.nav a[aria-current="page"] { background: var(--accent-soft); color: var(--ink); }
+.seg { display: inline-flex; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: none; padding: 5px 12px; border-radius: 999px; cursor: pointer; font-weight: 600; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+
+main { padding-block: 28px 120px; }
+.eyebrow { font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); padding: 9px 16px; border-radius: 999px; font-weight: 600; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.small { padding: 5px 11px; font-size: .85rem; }
+.btn.danger { color: var(--bad); }
+.btn svg { width: 14px; height: 14px; fill: currentColor; }
+
+/* library */
+.intro { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px 48px; align-items: end; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+.intro h1 { font-size: clamp(2.2rem, 5.5vw, 3.9rem); font-weight: 800; letter-spacing: -0.035em; margin-block: 10px 14px; }
+.intro h1 span { background: linear-gradient(transparent 58%, var(--mark-bg) 58% 92%, transparent 92%); padding-inline: 2px; }
+.lede { font-size: 1.08rem; color: var(--muted); max-width: 38rem; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.stats div { background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.stats b { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stats span { font-size: .8rem; color: var(--muted); }
+
+.upnext { margin-top: 28px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 18px 24px; align-items: center; padding: 20px 24px; border-radius: var(--r); background: var(--accent); color: var(--accent-ink); text-decoration: none; }
+.upnext .eyebrow { color: inherit; opacity: .8; }
+.upnext h2 { font-size: 1.6rem; font-weight: 800; margin-block: 4px; font-family: var(--f-read); font-weight: 500; letter-spacing: -0.01em; }
+.upnext p { opacity: .9; max-width: 44rem; }
+.upnext .cover { font-size: 2.6rem; width: 4.5rem; height: 4.5rem; display: grid; place-items: center; border-radius: 14px; background: rgb(255 255 255 / .14); }
+.upnext .go { font-weight: 700; white-space: nowrap; }
+
+.shelf { margin-top: 44px; }
+.shelf-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 16px; }
+.shelf-head h2 { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
+.cefr { font-size: .8rem; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 0 8px; }
+.shelf-head p { color: var(--muted); flex-basis: 100%; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr)); gap: 14px; }
+.card { display: flex; flex-direction: column; gap: 6px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); text-decoration: none; transition: border-color .15s, transform .15s; }
+.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+.card .cover { font-size: 1.9rem; line-height: 1; }
+.card h3 { font-family: var(--f-read); font-weight: 500; font-size: 1.25rem; letter-spacing: -0.01em; }
+.card .en { color: var(--muted); font-size: .9rem; }
+.card .meta { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: auto; }
+.meter { height: 6px; border-radius: 99px; background: var(--sunk); overflow: hidden; margin-top: 8px; }
+.meter i { display: block; height: 100%; width: var(--v); background: var(--accent); border-radius: 99px; }
+.badge { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
+.b-zone { background: var(--mark-bg); color: var(--mark-fg); }
+.b-start { background: var(--accent-soft); color: var(--ink); }
+.b-done { background: none; color: var(--good); border: 1px solid currentColor; }
+
+.method { margin-top: 56px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+.method h3 { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+.method p { color: var(--muted); font-size: .92rem; }
+
+/* reader */
+.reader { max-width: 42rem; margin: 0 auto; }
+.back { text-decoration: none; color: var(--muted); font-weight: 600; font-size: .9rem; }
+.back:hover { color: var(--ink); }
+.r-head { margin-block: 18px 18px; }
+.r-head h1 { font-family: var(--f-read); font-weight: 500; font-size: clamp(2rem, 6vw, 2.8rem); letter-spacing: -0.02em; margin-block: 8px 4px; }
+.r-head .sub { color: var(--muted); font-style: italic; font-family: var(--f-read); }
+.cov-line { margin-top: 12px; display: flex; align-items: center; gap: 10px; font-size: .9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cov-line .meter { flex: 1; max-width: 12rem; margin: 0; }
+
+.controls { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 58px); z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 12px; margin-inline: -12px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); border-radius: var(--r); border: 1px solid var(--line); }
+.controls select { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 10px; font-weight: 600; font-size: .85rem; }
+.toggle { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600; color: var(--muted); cursor: pointer; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+.toggle input { accent-color: var(--accent); margin: 0; }
+.timer { margin-left: auto; font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.timer b { color: var(--ink); }
+.voice-note { font-size: .82rem; color: var(--bad); margin-top: 8px; }
+
+.sents { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-direction: column; }
+.sent { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 14px 12px; margin-inline: -12px; border-radius: var(--r); transition: background .2s; }
+.has-pics .sent { grid-template-columns: 3.6rem minmax(0, 1fr); }
+.sent.speaking { background: var(--accent-soft); }
+.pic { width: 3.6rem; height: 3.6rem; display: grid; place-items: center; font-size: 2rem; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.tl { font-family: var(--f-read); font-size: 1.32rem; line-height: 1.65; transition: filter .25s; }
+.en-tr { margin-top: 6px; color: var(--muted); font-size: .95rem; border-left: 2px solid var(--line); padding-left: 10px; }
+.s-actions { display: flex; gap: 6px; margin-top: 6px; opacity: .55; transition: opacity .15s; }
+.sent:hover .s-actions, .sent:focus-within .s-actions, .sent.speaking .s-actions { opacity: 1; }
+.icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 2px 10px; font-size: .75rem; font-weight: 700; letter-spacing: .04em; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+.icon-btn:hover { color: var(--ink); border-color: var(--accent); }
+.icon-btn svg { width: 10px; height: 10px; fill: currentColor; }
+
+.w { cursor: pointer; border-radius: 4px; padding: 0 1px; margin: 0 -1px; transition: background .15s; }
+.w:hover { background: var(--accent-soft); }
+.marks .w.s-new { text-decoration: underline dotted var(--mark); text-decoration-thickness: 2px; text-underline-offset: 5px; }
+.marks .w.s-learn { background: var(--mark-bg); color: var(--mark-fg); }
+.w.active { outline: 2px solid var(--accent); }
+.hide-text .sent:not(.revealed) .tl { filter: blur(7px); cursor: pointer; user-select: none; }
+.hide-text .sent:not(.revealed) .tl .w { pointer-events: none; }
+
+.panel { margin-top: 36px; padding: 22px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); }
+.panel h2 { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.015em; margin-bottom: 4px; }
+.panel > p { color: var(--muted); }
+.q { margin-top: 20px; }
+.q-text { font-family: var(--f-read); font-size: 1.12rem; margin-bottom: 10px; }
+.opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.opt { border: 1px solid var(--line); background: var(--bg); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-family: var(--f-read); font-size: 1rem; text-align: left; }
+.opt:hover:not(:disabled) { border-color: var(--accent); }
+.opt:disabled { cursor: default; }
+.opt.right { border-color: var(--good); color: var(--good); font-weight: 500; }
+.opt.wrong { border-color: var(--bad); color: var(--bad); text-decoration: line-through; }
+.q-fb { font-size: .85rem; margin-top: 6px; min-height: 1.3em; }
+.q-fb.ok { color: var(--good); } .q-fb.no { color: var(--bad); }
+.chk { display: flex; gap: 10px; align-items: flex-start; margin-block: 14px 18px; cursor: pointer; }
+.chk input { margin-top: 4px; accent-color: var(--accent); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.done-sum { font-size: 1.05rem; margin-block: 8px 18px; }
+.done-sum b { font-variant-numeric: tabular-nums; }
+
+/* word sheet */
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; justify-content: center; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); pointer-events: none; }
+.sheet-in { pointer-events: auto; width: 100%; max-width: 30rem; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 12px 40px rgb(0 0 0 / .22); padding: 16px 18px; animation: up .18s ease-out; }
+@keyframes up { from { transform: translateY(14px); opacity: .4; } }
+.sh-top { display: flex; align-items: center; gap: 10px; }
+.sh-word { font-family: var(--f-read); font-size: 1.6rem; font-weight: 500; margin-right: auto; overflow-wrap: anywhere; }
+.sh-gloss { margin-block: 4px 14px; font-size: 1.02rem; }
+.sh-gloss.none { color: var(--muted); font-style: italic; }
+.x { border: 0; background: none; font-size: 1.5rem; line-height: 1; cursor: pointer; color: var(--muted); padding: 2px 6px; }
+.sheet .seg { width: 100%; }
+.sheet .seg button { flex: 1; }
+
+/* progress */
+.p-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: end; }
+.p-head h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; letter-spacing: -0.03em; margin-top: 8px; }
+.big { font-size: clamp(3rem, 9vw, 5.5rem); font-weight: 800; letter-spacing: -0.045em; line-height: 1; font-variant-numeric: tabular-nums; }
+.big small { font-size: .4em; color: var(--muted); letter-spacing: -0.01em; font-weight: 600; }
+.split { color: var(--muted); margin-top: 8px; font-variant-numeric: tabular-nums; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 20px; margin-top: 28px; align-items: start; }
+.card-p { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; min-width: 0; }
+.card-p h2 { font-size: 1.1rem; font-weight: 800; margin-bottom: 4px; }
+.card-p .hint { color: var(--muted); font-size: .88rem; }
+.chart { width: 100%; height: auto; display: block; margin-top: 12px; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart text { fill: var(--muted); font-size: 11px; font-family: var(--f-ui); }
+.chart text.today { fill: var(--ink); font-weight: 700; }
+.chart .r { fill: var(--accent); } .chart .o { fill: var(--mark); }
+.legend { display: flex; gap: 16px; font-size: .82rem; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+.ladder { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; }
+.ladder li { display: grid; grid-template-columns: 4.2rem minmax(0, 1fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); color: var(--muted); }
+.ladder li:first-child { border-top: 0; }
+.ladder .h { font-weight: 800; font-variant-numeric: tabular-nums; }
+.ladder b { display: block; color: inherit; font-weight: 700; }
+.ladder .reached { color: var(--ink); }
+.ladder .reached .h { color: var(--accent); }
+.ladder .current { background: var(--accent-soft); border-radius: 10px; padding-inline: 10px; margin-inline: -10px; border-top-color: transparent; }
+.ladder .current + li { border-top-color: transparent; }
+.ladder .nextm .meter { max-width: 14rem; }
+.ladder small { display: block; font-size: .8rem; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+form.log { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+form.log label { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; font-weight: 600; color: var(--muted); }
+form.log input, form.log select { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 8px 10px; min-width: 0; width: 100%; font-weight: 500; color: var(--ink); }
+form.log .btn { grid-column: 1 / -1; justify-content: center; }
+.recent { list-style: none; padding: 0; margin: 14px 0 0; font-size: .88rem; }
+.recent li { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.recent li span:first-child { flex: 1; min-width: 0; }
+.linkish { border: 0; background: none; color: var(--muted); cursor: pointer; text-decoration: underline; font-size: .8rem; padding: 0; }
+
+.vocab-counts { display: flex; gap: 24px; margin-top: 10px; }
+.vocab-counts b { font-size: 1.8rem; font-weight: 800; display: block; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.vocab-counts span { font-size: .8rem; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.chip { border: 1px solid var(--line); background: var(--mark-bg); color: var(--mark-fg); border-radius: 8px; padding: 4px 10px; cursor: pointer; text-align: left; }
+.chip span { font-family: var(--f-read); font-weight: 500; }
+.chip small { opacity: .75; margin-left: 4px; }
+.chip:hover { border-color: var(--mark); }
+.empty { color: var(--muted); font-size: .9rem; margin-top: 12px; }
+.confirm { margin-top: 12px; padding: 12px; border: 1px solid var(--bad); border-radius: 10px; }
+.confirm p { margin-bottom: 10px; }
+
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 30; background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px; font-weight: 600; font-size: .9rem; box-shadow: 0 8px 24px rgb(0 0 0 / .25); max-width: calc(100% - 32px); }
+
+@media (max-width: 760px) {
+  .intro, .grid2, .p-head { grid-template-columns: minmax(0, 1fr); }
+  .upnext { grid-template-columns: auto minmax(0, 1fr); }
+  .upnext .go { grid-column: 1 / -1; }
+  .tl { font-size: 1.2rem; }
+  .bar { position: static; }
+  .controls { top: env(safe-area-inset-top, 0px); }
+}
+@media (max-width: 460px) {
+  form.log { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  form.log label:last-of-type { grid-column: 1 / -1; }
+  .has-pics .sent { grid-template-columns: 2.8rem minmax(0, 1fr); gap: 10px; }
+  .pic { width: 2.8rem; height: 2.8rem; font-size: 1.5rem; border-radius: 10px; }
+  .stats b { font-size: 1.3rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="#library" aria-label="Lento home">lento<i>.</i></a>
+    <nav class="nav" aria-label="Main">
+      <a href="#library" data-nav="library">Stories</a>
+      <a href="#progress" data-nav="progress">Progress</a>
+    </nav>
+    <div class="seg" role="group" aria-label="Language" id="langs"></div>
+  </div>
+</header>
+<main class="wrap" id="app"></main>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-in" role="dialog" aria-label="Word details">
+    <div class="sh-top">
+      <span class="sh-word" id="sh-word"></span>
+      <button class="icon-btn" id="sh-say" type="button"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0l9 5-9 5z"/></svg>Hear it</button>
+      <button class="x" id="sh-close" type="button" aria-label="Close">×</button>
+    </div>
+    <p class="sh-gloss" id="sh-gloss"></p>
+    <div class="seg" role="group" aria-label="How well do you know this word?" id="sh-states">
+      <button type="button" data-s="0">New</button>
+      <button type="button" data-s="1">Learning</button>
+      <button type="button" data-s="2">Known</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+// DATA START
+const LANGS = {
+  es: { name: 'Spanish', native: 'Español', short: 'ES', tts: 'es-ES' },
+  fr: { name: 'French', native: 'Français', short: 'FR', tts: 'fr-FR' },
+};
+const LEVELS = [
+  { name: 'Superbeginner', cefr: 'A0', wpm: 35, desc: 'Pictures and heavy repetition carry the meaning. Start here on day one.' },
+  { name: 'Beginner', cefr: 'A1', wpm: 55, desc: 'Everyday scenes in the present tense, with short dialogue.' },
+  { name: 'Intermediate', cefr: 'A2–B1', wpm: 80, desc: 'Past tenses, longer sentences and no picture support.' },
+  { name: 'Advanced', cefr: 'B1–B2', wpm: 100, desc: 'Literary narration, the subjunctive and denser vocabulary.' },
+];
+const NAMES = {
+  es: ['ana', 'toto', 'luis', 'marta', 'sofía', 'tomás'],
+  fr: ['max', 'léa', 'paul', 'claire', 'paris', 'nice', 'anne', 'lyon'],
+};
+
+// Each sentence: [target text, English, picture]
+const STORIES = [
+  { id: 'es-gato', lang: 'es', level: 0, cover: '🐈', title: 'El gato y la caja', en: 'The cat and the box',
+    sentences: [
+      ['Hay un gato.', 'There is a cat.', '🐈'],
+      ['El gato es pequeño.', 'The cat is small.', '🐈'],
+      ['El gato es negro.', 'The cat is black.', '🐈‍⬛'],
+      ['Hay una caja.', 'There is a box.', '📦'],
+      ['La caja es grande.', 'The box is big.', '📦'],
+      ['¿El gato es grande? No. El gato es pequeño.', 'Is the cat big? No. The cat is small.', '🤏'],
+      ['El gato mira la caja.', 'The cat looks at the box.', '👀'],
+      ['El gato quiere la caja.', 'The cat wants the box.', '💭'],
+      ['El gato salta. ¡Hop!', 'The cat jumps. Hop!', '⤴️'],
+      ['Ahora el gato está en la caja.', 'Now the cat is in the box.', '📦'],
+      ['El gato está contento.', 'The cat is happy.', '😺'],
+      ['La caja es grande y el gato es pequeño. ¡Perfecto!', 'The box is big and the cat is small. Perfect!', '✨'],
+    ],
+    questions: [
+      ['¿El gato es grande o pequeño?', ['Grande', 'Pequeño', 'Azul'], 1],
+      ['¿Dónde está el gato ahora?', ['En la casa', 'En la caja', 'En el autobús'], 1],
+    ] },
+  { id: 'es-ana', lang: 'es', level: 0, cover: '🏠', title: 'La casa de Ana', en: 'Ana’s house',
+    sentences: [
+      ['Esta es Ana.', 'This is Ana.', '👩'],
+      ['Ana tiene una casa.', 'Ana has a house.', '🏠'],
+      ['La casa de Ana es azul.', 'Ana’s house is blue.', '🔵'],
+      ['La casa no es roja. La casa es azul.', 'The house is not red. The house is blue.', '🔵'],
+      ['En la casa hay una cocina.', 'In the house there is a kitchen.', '🍳'],
+      ['En la cocina hay una mesa y dos sillas.', 'In the kitchen there is a table and two chairs.', '🪑'],
+      ['Ana tiene un perro.', 'Ana has a dog.', '🐕'],
+      ['El perro se llama Toto.', 'The dog is called Toto.', '🐕'],
+      ['Toto no tiene una casa grande. Toto tiene una cama pequeña.', 'Toto doesn’t have a big house. Toto has a small bed.', '🛏️'],
+      ['Por la mañana, Ana come en la cocina.', 'In the morning, Ana eats in the kitchen.', '☀️'],
+      ['Toto también come. ¡Toto come mucho!', 'Toto eats too. Toto eats a lot!', '🍽️'],
+      ['Ana dice: «¡Toto, no! ¡Es mi pan!»', 'Ana says: “Toto, no! That’s my bread!”', '🍞'],
+    ],
+    questions: [
+      ['¿De qué color es la casa de Ana?', ['Roja', 'Azul', 'Negra'], 1],
+      ['¿Cómo se llama el perro?', ['Ana', 'Toto', 'Luis'], 1],
+      ['¿Dónde come Ana por la mañana?', ['En la cocina', 'En la cama', 'En el mercado'], 0],
+    ] },
+  { id: 'es-mercado', lang: 'es', level: 1, cover: '🧺', title: 'Un día en el mercado', en: 'A day at the market',
+    sentences: [
+      ['Es sábado. Luis va al mercado.', 'It’s Saturday. Luis goes to the market.', '🧺'],
+      ['El mercado está cerca de su casa. Luis camina diez minutos.', 'The market is near his house. Luis walks for ten minutes.', '🚶'],
+      ['En el mercado hay mucha gente y mucho ruido.', 'At the market there are lots of people and lots of noise.', '🗣️'],
+      ['Luis quiere comprar fruta.', 'Luis wants to buy fruit.', '🍎'],
+      ['Una señora vende manzanas, naranjas y plátanos.', 'A woman sells apples, oranges and bananas.', '🍊'],
+      ['—Buenos días —dice Luis—. ¿Cuánto cuestan las manzanas?', '“Good morning,” says Luis. “How much are the apples?”', '💬'],
+      ['—Dos euros el kilo —dice la señora.', '“Two euros a kilo,” says the woman.', '⚖️'],
+      ['—Un kilo de manzanas, por favor. Y tres plátanos.', '“A kilo of apples, please. And three bananas.”', '🍌'],
+      ['La señora pone la fruta en una bolsa. Luis paga con un billete de cinco euros.', 'The woman puts the fruit in a bag. Luis pays with a five-euro note.', '💶'],
+      ['—Gracias. Aquí tiene su cambio —dice la señora.', '“Thank you. Here’s your change,” says the woman.', '🪙'],
+      ['Luis cuenta el dinero. ¡La señora le da demasiado cambio!', 'Luis counts the money. The woman gives him too much change!', '🤔'],
+      ['—Perdone, señora. Usted me da un euro de más.', '“Excuse me, ma’am. You’ve given me one euro too many.”', '☝️'],
+      ['La señora sonríe. —¡Qué honesto! Toma, una naranja para ti.', 'The woman smiles. “How honest! Here, an orange for you.”', '🍊'],
+      ['Luis vuelve a casa con su fruta y una naranja gratis.', 'Luis goes back home with his fruit and a free orange.', '😊'],
+    ],
+    questions: [
+      ['¿Qué día es?', ['Lunes', 'Sábado', 'Domingo'], 1],
+      ['¿Qué quiere comprar Luis?', ['Pan', 'Fruta', 'Un libro'], 1],
+      ['¿Qué le da la señora al final?', ['Una manzana', 'Un plátano', 'Una naranja'], 2],
+    ] },
+  { id: 'es-autobus', lang: 'es', level: 1, cover: '🚌', title: 'El autobús equivocado', en: 'The wrong bus',
+    sentences: [
+      ['Marta vive en una ciudad grande. Todos los días toma el autobús para ir al trabajo.', 'Marta lives in a big city. Every day she takes the bus to go to work.', '🏙️'],
+      ['Normalmente toma el autobús número doce.', 'She normally takes bus number twelve.', '🚌'],
+      ['Pero hoy Marta está muy cansada. Lee un libro y no mira bien.', 'But today Marta is very tired. She reads a book and doesn’t look carefully.', '📖'],
+      ['Sube al autobús número veintiuno.', 'She gets on bus number twenty-one.', '🚌'],
+      ['Después de quince minutos, Marta levanta la cabeza.', 'After fifteen minutes, Marta lifts her head.', '⏱️'],
+      ['Por la ventana ve árboles, vacas y un río.', 'Out the window she sees trees, cows and a river.', '🐄'],
+      ['—¿Dónde estoy? —piensa Marta—. ¡Aquí no hay oficinas!', '“Where am I?” Marta thinks. “There are no offices here!”', '😳'],
+      ['Marta habla con el conductor.', 'Marta talks to the driver.', '💬'],
+      ['—Perdone, ¿este autobús va al centro?', '“Excuse me, does this bus go downtown?”', '❓'],
+      ['—No, señora. Este autobús va al campo. El centro está en la otra dirección.', '“No, ma’am. This bus goes to the countryside. Downtown is the other way.”', '🌾'],
+      ['Marta baja del autobús. Llama a su jefe por teléfono.', 'Marta gets off the bus. She calls her boss on the phone.', '📱'],
+      ['—Lo siento, voy a llegar tarde. Estoy en el campo, con unas vacas.', '“I’m sorry, I’m going to be late. I’m in the countryside, with some cows.”', '🐄'],
+      ['Su jefe se ríe. —No pasa nada, Marta. Disfruta de las vacas.', 'Her boss laughs. “No problem, Marta. Enjoy the cows.”', '😄'],
+      ['Esa tarde, Marta llega a la oficina con una historia muy buena.', 'That afternoon, Marta arrives at the office with a very good story.', '🏢'],
+    ],
+    questions: [
+      ['¿Qué autobús toma Marta normalmente?', ['El número doce', 'El número veintiuno', 'El número quince'], 0],
+      ['¿Qué ve Marta por la ventana?', ['Oficinas', 'Vacas y un río', 'El mar'], 1],
+      ['¿Cómo reacciona el jefe?', ['Se enfada.', 'Se ríe.', 'No contesta.'], 1],
+    ] },
+  { id: 'es-carta', lang: 'es', level: 2, cover: '✉️', title: 'La carta de la abuela', en: 'Grandmother’s letter',
+    sentences: [
+      ['Cuando Sofía tenía diez años, pasaba todos los veranos en el pueblo de su abuela.', 'When Sofía was ten years old, she spent every summer in her grandmother’s village.'],
+      ['La casa de la abuela era vieja y olía a pan recién hecho.', 'Her grandmother’s house was old and smelled of freshly baked bread.'],
+      ['Cada noche, después de cenar, la abuela le contaba historias de su juventud.', 'Every night, after dinner, her grandmother told her stories from her youth.'],
+      ['Ahora Sofía tiene treinta años y vive lejos, en otro país.', 'Now Sofía is thirty and lives far away, in another country.'],
+      ['Una mañana de otoño, encuentra una carta en su buzón.', 'One autumn morning, she finds a letter in her mailbox.'],
+      ['Reconoce la letra enseguida: es de su abuela.', 'She recognizes the handwriting right away: it’s from her grandmother.'],
+      ['«Querida Sofía —dice la carta—, el jardín está lleno de flores y la casa está muy tranquila sin ti.»', '“Dear Sofía,” says the letter, “the garden is full of flowers and the house is very quiet without you.”'],
+      ['«No necesito regalos. Solo quiero escuchar tu voz otra vez.»', '“I don’t need presents. I just want to hear your voice again.”'],
+      ['Sofía lee la carta dos veces. Luego mira por la ventana durante un largo rato.', 'Sofía reads the letter twice. Then she looks out the window for a long while.'],
+      ['Esa misma tarde, compra un billete de tren.', 'That same afternoon, she buys a train ticket.'],
+      ['Tres días después, llama a la puerta de la vieja casa.', 'Three days later, she knocks on the door of the old house.'],
+      ['La abuela abre, la mira en silencio y después la abraza muy fuerte.', 'Her grandmother opens the door, looks at her in silence and then hugs her very tightly.'],
+      ['—Sabía que ibas a venir —dice, sonriendo—. El pan todavía está caliente.', '“I knew you would come,” she says, smiling. “The bread is still warm.”'],
+    ],
+    questions: [
+      ['¿Dónde pasaba Sofía los veranos?', ['En la playa', 'En el pueblo de su abuela', 'En otro país'], 1],
+      ['¿Qué quiere la abuela?', ['Regalos', 'Escuchar la voz de Sofía', 'Un billete de tren'], 1],
+      ['¿Qué hace Sofía después de leer la carta?', ['Compra un billete de tren.', 'Escribe otra carta.', 'Llama a su jefe.'], 0],
+    ] },
+  { id: 'es-faro', lang: 'es', level: 3, cover: '🌊', title: 'El faro', en: 'The lighthouse',
+    sentences: [
+      ['En una pequeña isla del norte vivía un hombre llamado Tomás, el guardián del faro.', 'On a small island in the north lived a man named Tomás, the lighthouse keeper.'],
+      ['Su trabajo consistía en encender la luz cada noche para que los barcos no chocaran contra las rocas.', 'His job was to light the lamp every night so that ships would not crash into the rocks.'],
+      ['Durante cuarenta años, no había fallado ni una sola noche.', 'For forty years, he had not missed a single night.'],
+      ['Sin embargo, un invierno, una terrible tormenta cortó la electricidad de toda la isla.', 'One winter, however, a terrible storm cut the electricity on the whole island.'],
+      ['Tomás sabía que un barco de pescadores estaba a punto de regresar al puerto.', 'Tomás knew that a fishing boat was about to return to the harbor.'],
+      ['Sin perder ni un segundo, subió los ciento veinte escalones con una vieja lámpara de aceite.', 'Without losing a second, he climbed the hundred and twenty steps with an old oil lamp.'],
+      ['El viento soplaba con tanta fuerza que apenas podía mantener la llama encendida.', 'The wind was blowing so hard that he could barely keep the flame lit.'],
+      ['Aun así, se quedó allí arriba toda la noche, protegiendo la pequeña luz con sus manos.', 'Even so, he stayed up there all night, shielding the small light with his hands.'],
+      ['Al amanecer, el barco entró en el puerto sin un solo rasguño.', 'At dawn, the boat sailed into the harbor without a single scratch.'],
+      ['Los pescadores nunca supieron quién los había salvado, pero Tomás no necesitaba que se lo dijeran.', 'The fishermen never found out who had saved them, but Tomás didn’t need to be told.'],
+    ],
+    questions: [
+      ['¿Cuál era el trabajo de Tomás?', ['Pescador', 'Guardián del faro', 'Conductor'], 1],
+      ['¿Qué cortó la tormenta?', ['El puerto', 'La electricidad', 'El viento'], 1],
+      ['¿Qué usó Tomás para hacer luz?', ['Una lámpara de aceite', 'Un teléfono', 'Una vela del barco'], 0],
+    ] },
+
+  { id: 'fr-chien', lang: 'fr', level: 0, cover: '🐕', title: 'Le chien bleu', en: 'The blue dog',
+    sentences: [
+      ['Voici un chien.', 'Here is a dog.', '🐕'],
+      ['Le chien est bleu !', 'The dog is blue!', '🔵'],
+      ['Un chien bleu ? Oui, un chien bleu.', 'A blue dog? Yes, a blue dog.', '🐕'],
+      ['Le chien s’appelle Max.', 'The dog is called Max.', '🏷️'],
+      ['Max a une balle.', 'Max has a ball.', '⚽'],
+      ['La balle est rouge.', 'The ball is red.', '🔴'],
+      ['Max aime la balle. Max aime beaucoup la balle.', 'Max likes the ball. Max likes the ball a lot.', '❤️'],
+      ['Un jour, la balle tombe dans l’eau.', 'One day, the ball falls into the water.', '💧'],
+      ['Max est triste.', 'Max is sad.', '😢'],
+      ['Une petite fille arrive. Elle s’appelle Léa.', 'A little girl arrives. Her name is Léa.', '👧'],
+      ['Léa prend la balle et la donne à Max.', 'Léa takes the ball and gives it to Max.', '🤲'],
+      ['Maintenant, Max est content. Max et Léa jouent ensemble.', 'Now Max is happy. Max and Léa play together.', '🎉'],
+    ],
+    questions: [
+      ['De quelle couleur est le chien ?', ['Rouge', 'Bleu', 'Noir'], 1],
+      ['Où tombe la balle ?', ['Dans l’eau', 'Dans la rue', 'Dans le café'], 0],
+      ['Comment s’appelle la petite fille ?', ['Anne', 'Max', 'Léa'], 2],
+    ] },
+  { id: 'fr-cafe', lang: 'fr', level: 1, cover: '☕', title: 'Au café', en: 'At the café',
+    sentences: [
+      ['C’est lundi matin. Paul entre dans un petit café.', 'It’s Monday morning. Paul walks into a small café.', '☕'],
+      ['Il fait froid dehors, et Paul a froid.', 'It’s cold outside, and Paul is cold.', '🥶'],
+      ['Il y a une table libre près de la fenêtre. Paul s’assoit.', 'There’s a free table near the window. Paul sits down.', '🪟'],
+      ['Le serveur arrive : « Bonjour, monsieur. Qu’est-ce que vous voulez ? »', 'The waiter comes over: “Hello, sir. What would you like?”', '💬'],
+      ['« Un café, s’il vous plaît. Et un croissant. »', '“A coffee, please. And a croissant.”', '🥐'],
+      ['« Désolé, nous n’avons plus de croissants. »', '“Sorry, we have no more croissants.”', '🚫'],
+      ['« Ah… Alors, une tartine avec du beurre. »', '“Ah… Then a slice of bread with butter.”', '🧈'],
+      ['Cinq minutes après, le serveur apporte un grand café chaud et une tartine.', 'Five minutes later, the waiter brings a big hot coffee and a slice of bread.', '☕'],
+      ['Paul boit son café et regarde les gens dans la rue.', 'Paul drinks his coffee and watches the people in the street.', '👀'],
+      ['Une femme passe avec un sac plein de croissants !', 'A woman walks by with a bag full of croissants!', '🛍️'],
+      ['Paul rit : « Elle a tous les croissants de la ville ! »', 'Paul laughs: “She has all the croissants in town!”', '😂'],
+      ['Il paie trois euros et sort du café. Il n’a plus froid.', 'He pays three euros and leaves the café. He isn’t cold anymore.', '🌤️'],
+    ],
+    questions: [
+      ['Quel jour est-ce ?', ['Lundi', 'Samedi', 'Dimanche'], 0],
+      ['Qu’est-ce que Paul mange ?', ['Un croissant', 'Une tartine', 'Une pomme'], 1],
+      ['Combien paie Paul ?', ['Deux euros', 'Trois euros', 'Cinq euros'], 1],
+    ] },
+  { id: 'fr-train', lang: 'fr', level: 2, cover: '🌌', title: 'Le train de nuit', en: 'The night train',
+    sentences: [
+      ['Claire n’avait jamais pris le train de nuit.', 'Claire had never taken the night train.'],
+      ['Ce soir-là, elle partait de Paris pour aller voir son frère à Nice.', 'That evening, she was leaving Paris to go and see her brother in Nice.'],
+      ['Dans son compartiment, il y avait déjà un vieil homme qui lisait le journal.', 'In her compartment there was already an old man reading the newspaper.'],
+      ['Ils ont échangé quelques mots, puis Claire s’est endormie au bruit régulier des roues.', 'They exchanged a few words, then Claire fell asleep to the steady sound of the wheels.'],
+      ['Vers trois heures du matin, le train s’est arrêté brusquement au milieu de nulle part.', 'Around three in the morning, the train stopped suddenly in the middle of nowhere.'],
+      ['Il n’y avait aucune lumière dehors, seulement des milliers d’étoiles.', 'There was no light outside, only thousands of stars.'],
+      ['Le vieil homme a ouvert la fenêtre et a souri : « Regardez. En ville, on ne voit jamais le ciel comme ça. »', 'The old man opened the window and smiled: “Look. In the city, you never see the sky like this.”'],
+      ['Ils sont restés là, en silence, à regarder les étoiles pendant presque une heure.', 'They stayed there in silence, watching the stars for almost an hour.'],
+      ['Quand le train est reparti, Claire n’avait plus du tout sommeil.', 'When the train set off again, Claire wasn’t sleepy at all anymore.'],
+      ['Le matin, à Nice, son frère lui a demandé si elle avait bien dormi.', 'In the morning, in Nice, her brother asked her if she had slept well.'],
+      ['« Pas vraiment, a-t-elle répondu. Mais c’était la plus belle nuit de mon voyage. »', '“Not really,” she answered. “But it was the most beautiful night of my trip.”'],
+    ],
+    questions: [
+      ['Où va Claire ?', ['À Paris', 'À Nice', 'À Lyon'], 1],
+      ['Qu’est-ce qu’ils regardent pendant l’arrêt ?', ['Le journal', 'La ville', 'Les étoiles'], 2],
+      ['Claire a bien dormi ?', ['Oui, très bien.', 'Pas vraiment.'], 1],
+    ] },
+];
+
+const DICT = {
+  es: {
+    a: 'to, at', abraza: 'hugs', abre: 'opens', aceite: 'oil', ahora: 'now', al: 'to the, at the (a + el)', allí: 'there',
+    amanecer: 'dawn; to dawn', ana: 'Ana (name)', apenas: 'barely, hardly', aquí: 'here', arriba: 'up, upstairs', así: 'like this, so (aun así = even so)',
+    aun: 'even (aun así = even so)', autobús: 'bus', azul: 'blue', años: 'years', abuela: 'grandmother', baja: 'gets off, goes down',
+    barco: 'boat, ship', barcos: 'boats, ships', bien: 'well, properly', billete: 'banknote; ticket', bolsa: 'bag', buena: 'good (fem.)',
+    buenos: 'good (masc. pl.) · buenos días = good morning', buzón: 'mailbox', cabeza: 'head', cada: 'each, every', caja: 'box',
+    caliente: 'hot, warm', cama: 'bed', cambio: 'change (money); a change', camina: 'walks', campo: 'countryside; field', cansada: 'tired (fem.)',
+    carta: 'letter (mail)', casa: 'house, home', cena: 'dinner', cenar: 'to have dinner', centro: 'center, downtown', cerca: 'near, close (cerca de = near)',
+    chocaran: '(they) would crash (subjunctive of chocar)', ciento: 'one hundred (ciento veinte = 120)', cinco: 'five', ciudad: 'city', cocina: 'kitchen',
+    color: 'color', come: 'eats', compra: 'buys', comprar: 'to buy', con: 'with', conductor: 'driver', consistía: 'consisted (consistía en = was about, involved)',
+    contaba: 'used to tell, would tell', contento: 'happy, pleased', contesta: 'answers, replies', contra: 'against, into', cortó: 'cut (off)',
+    cuando: 'when', cuarenta: 'forty', cuenta: 'counts', cuestan: '(they) cost', cuánto: 'how much', cuál: 'which, what', cómo: 'how; what (¿cómo se llama? = what is … called?)',
+    da: 'gives', de: 'of, from (la casa de Ana = Ana’s house)', del: 'of the, from the (de + el)', demasiado: 'too much', después: 'after, afterwards, later',
+    dice: 'says', diez: 'ten', dijeran: '(they) told (subjunctive of decir)', dinero: 'money', dirección: 'direction', disfruta: 'enjoy! (also: enjoys)',
+    domingo: 'Sunday', dos: 'two', durante: 'during, for (a length of time)', días: 'days · buenos días = good morning', día: 'day',
+    dónde: 'where', el: 'the (masc.)', electricidad: 'electricity', embargo: 'sin embargo = however', en: 'in, on, at', encender: 'to light, to switch on',
+    encendida: 'lit, switched on (fem.)', encuentra: 'finds', enfada: 'gets angry (se enfada)', enseguida: 'right away, at once', entró: 'entered, came in',
+    equivocado: 'wrong, mistaken', era: 'was (description in the past)', es: 'is', esa: 'that (fem.)', escalones: 'steps, stairs', escribe: 'writes',
+    escuchar: 'to hear, to listen to', esta: 'this (fem.)', estaba: 'was (location, state)', este: 'this (masc.)', estoy: 'I am (location, state)', está: 'is (location, state)',
+    euro: 'euro', euros: 'euros', faro: 'lighthouse', fallado: 'failed, missed (había fallado = had missed)', favor: 'favor · por favor = please',
+    final: 'end (al final = in the end)', flores: 'flowers', fruta: 'fruit', fuerte: 'strong; tightly, hard', fuerza: 'force, strength',
+    gato: 'cat', gente: 'people', gracias: 'thank you', grande: 'big, large', gratis: 'free (no cost)', guardián: 'keeper, guardian',
+    había: 'had (helper verb: había fallado = had missed)', habla: 'speaks, talks', hace: 'does, makes', hacer: 'to do, to make', hay: 'there is, there are',
+    hecho: 'made (pan recién hecho = freshly baked bread)', historia: 'story', historias: 'stories', hombre: 'man', honesto: 'honest', hop: 'hop! (a sound)',
+    hoy: 'today', ibas: 'you were going (ibas a venir = you were going to come)', ir: 'to go', isla: 'island', jardín: 'garden', jefe: 'boss',
+    juventud: 'youth', kilo: 'kilo', la: 'the (fem.); her, it', largo: 'long', las: 'the (fem. pl.)', le: '(to) him, (to) her, (to) you (formal)',
+    lee: 'reads', leer: 'to read', lejos: 'far, far away', letra: 'handwriting; letter of the alphabet', levanta: 'lifts, raises', libro: 'book',
+    llama: 'calls; knocks (llama a la puerta); flame · se llama = is called', llamado: 'called, named', llega: 'arrives', llegar: 'to arrive', lleno: 'full',
+    lo: 'it, him · lo siento = I’m sorry', los: 'the (masc. pl.); them', luego: 'then, later', lunes: 'Monday', luz: 'light', lámpara: 'lamp',
+    luis: 'Luis (name)', manos: 'hands', mantener: 'to keep, to maintain', manzana: 'apple', manzanas: 'apples', mar: 'sea', marta: 'Marta (name)',
+    me: 'me, to me', mercado: 'market', mesa: 'table', mi: 'my', minutos: 'minutes', mira: 'looks at, watches', misma: 'same (fem.)',
+    mucha: 'a lot of, much (fem.)', mucho: 'a lot, much', muy: 'very', mañana: 'morning; tomorrow', más: 'more (de más = extra, too many)',
+    nada: 'nothing · no pasa nada = no problem', naranja: 'orange', naranjas: 'oranges', necesitaba: 'needed', necesito: 'I need', negra: 'black (fem.)',
+    negro: 'black', ni: 'not even; nor', no: 'no, not', noche: 'night', normalmente: 'normally, usually', norte: 'north', nunca: 'never',
+    número: 'number', o: 'or', oficina: 'office', oficinas: 'offices', olía: 'smelled (olía a = smelled of)', otoño: 'autumn, fall',
+    otra: 'other, another (fem.) · otra vez = again', otro: 'other, another', paga: 'pays', pan: 'bread', para: 'for; in order to (para que = so that)',
+    pasa: 'happens; passes · no pasa nada = no problem', pasaba: 'used to spend (time)', país: 'country', pequeña: 'small, little (fem.)', pequeño: 'small, little',
+    perdone: 'excuse me (formal)', perder: 'to lose; to waste', perfecto: 'perfect', pero: 'but', perro: 'dog', pescador: 'fisherman', pescadores: 'fishermen',
+    piensa: 'thinks', playa: 'beach', podía: 'could, was able to', pone: 'puts', por: 'for, by, through (por la mañana = in the morning; por la ventana = out the window)',
+    protegiendo: 'protecting, shielding', pueblo: 'village, small town', puerta: 'door', puerto: 'harbor, port', punto: 'point · a punto de = about to',
+    que: 'that, which, who', querida: 'dear (fem.)', quedó: 'stayed, remained (se quedó)', quiere: 'wants', quiero: 'I want', quince: 'fifteen',
+    quién: 'who', qué: 'what; how (¡qué honesto! = how honest!)', rasguño: 'scratch', rato: 'a while (un largo rato = a long while)', reacciona: 'reacts',
+    recién: 'freshly, just', reconoce: 'recognizes', regalos: 'presents, gifts', regresar: 'to return, to come back', rocas: 'rocks', roja: 'red (fem.)',
+    ruido: 'noise', río: 'river', ríe: 'laughs (se ríe)', salta: 'jumps', salvado: 'saved (los había salvado = had saved them)', se: 'himself, herself, itself (reflexive) · se llama = is called',
+    segundo: 'second', señora: 'lady, woman; ma’am', siento: 'I feel · lo siento = I’m sorry', silencio: 'silence', sillas: 'chairs', sin: 'without',
+    sola: 'single, only; alone (fem.)', solo: 'only, just; single', sonriendo: 'smiling', sonríe: 'smiles', soplaba: 'was blowing', su: 'his, her, their, your (formal)',
+    sube: 'gets on, goes up', subió: 'climbed, went up', supieron: 'found out, learned', sus: 'his, her, their (pl.)', sábado: 'Saturday', sabía: 'knew; I knew',
+    también: 'also, too', tanta: 'so much (fem.)', tarde: 'late; afternoon, evening', teléfono: 'phone', tenía: 'had; was (age: tenía diez años = was ten)',
+    terrible: 'terrible', ti: 'you (after a preposition: para ti = for you)', tiene: 'has · aquí tiene = here you are', toda: 'all, the whole (fem.)', todavía: 'still, yet',
+    todos: 'all, every (todos los días = every day)', toma: 'takes; here, take this!', tomás: 'Tomás (name)', tormenta: 'storm', toto: 'Toto (a dog’s name)',
+    trabajo: 'work, job', tranquila: 'quiet, calm (fem.)', treinta: 'thirty', tren: 'train', tres: 'three', tu: 'your (informal)', un: 'a, an (masc.); one',
+    una: 'a, an (fem.); one', unas: 'some (fem.)', usted: 'you (formal)', usó: 'used', vacas: 'cows', va: 'goes', veces: 'times (dos veces = twice)',
+    vela: 'candle; sail', veinte: 'twenty', veintiuno: 'twenty-one', vende: 'sells', venir: 'to come', ventana: 'window', ve: 'sees', veranos: 'summers',
+    vez: 'time, occasion · otra vez = again', vieja: 'old (fem.)', viento: 'wind', vive: 'lives', vivía: 'lived, used to live', voy: 'I go, I’m going (voy a = I’m going to)',
+    plátano: 'banana', plátanos: 'bananas', doce: 'twelve', invierno: 'winter',
+    voz: 'voice', vuelve: 'returns, goes back', y: 'and', árboles: 'trees', sofía: 'Sofía (name)',
+  },
+  fr: {
+    'a': 'has', 'a-t-elle': 'she has (a-t-elle répondu = she answered)', 'ah': 'ah', 'aime': 'likes, loves', 'aller': 'to go', 'alors': 'so, then',
+    'anne': 'Anne (name)', 'apporte': 'brings', 'appelle': 'calls · s’appelle = is called', 'après': 'after, later', 'arrive': 'arrives, comes',
+    'arrêt': 'stop', 'arrêté': 'stopped (s’est arrêté = stopped)', 'assoit': 'sits · s’assoit = sits down', 'au': 'to the, at the (à + le)',
+    'aucune': 'no, not any (fem.)', 'avait': 'had (n’avait jamais pris = had never taken)', 'avec': 'with', 'avons': '(we) have', 'balle': 'ball',
+    'beaucoup': 'a lot, very much', 'belle': 'beautiful (fem.) · la plus belle = the most beautiful', 'beurre': 'butter', 'bien': 'well', 'bleu': 'blue',
+    'boit': 'drinks', 'bonjour': 'hello, good morning', 'bruit': 'noise, sound', 'brusquement': 'suddenly, abruptly', "c'": 'it, this (c’est = it is)',
+    'café': 'coffee; café', 'ce': 'this, that', 'chaud': 'hot, warm', 'chien': 'dog', 'ciel': 'sky', 'cinq': 'five', 'claire': 'Claire (name)',
+    'combien': 'how much, how many', 'comme': 'like, as', 'comment': 'how · comment s’appelle… = what is … called', 'compartiment': 'compartment',
+    'content': 'happy, pleased', 'couleur': 'color', 'croissant': 'croissant', 'croissants': 'croissants', "d'": 'of, some (before a vowel)', 'dans': 'in, into',
+    'de': 'of, from', 'dehors': 'outside', 'demandé': 'asked', 'des': 'some; of the (pl.)', 'deux': 'two', 'dimanche': 'Sunday', 'donne': 'gives',
+    'dormi': 'slept', 'du': 'some; of the, from the (de + le) · du tout = at all', 'déjà': 'already', 'désolé': 'sorry', "l'": 'the; it, him, her (before a vowel)',
+    'eau': 'water', 'elle': 'she, it', 'en': 'in', 'endormie': 'asleep · s’est endormie = fell asleep', 'ensemble': 'together', 'entre': 'enters, comes in',
+    'est': 'is', 'est-ce': 'is it · est-ce que = (turns a sentence into a question)', 'et': 'and', 'euros': 'euros', 'fait': 'does, makes · il fait froid = it’s cold (weather)',
+    'femme': 'woman; wife', 'fenêtre': 'window', 'fille': 'girl; daughter', 'frère': 'brother', 'froid': 'cold · avoir froid = to be cold',
+    'gens': 'people', 'grand': 'big, large', 'heure': 'hour', 'heures': 'hours; o’clock', 'homme': 'man', 'il': 'he, it · il y a = there is',
+    'ils': 'they', 'jamais': 'never, ever', 'jouent': '(they) play', 'jour': 'day · un jour = one day', 'journal': 'newspaper', 'la': 'the (fem.); her, it',
+    'le': 'the (masc.); him, it', 'les': 'the (pl.)', 'libre': 'free, available', 'lisait': 'was reading', 'lui': '(to) him, (to) her', 'lumière': 'light',
+    'lundi': 'Monday', 'là': 'there', 'léa': 'Léa (name)', 'lyon': 'Lyon (city)', 'mais': 'but', 'maintenant': 'now', 'mange': 'eats', 'matin': 'morning',
+    'max': 'Max (name)', 'milieu': 'middle', 'milliers': 'thousands', 'minutes': 'minutes', 'mon': 'my', 'monsieur': 'sir, Mr.', 'mots': 'words',
+    "n'": 'not (short for ne before a vowel)', 'ne': 'not (ne … pas / ne … jamais = not / never)', 'noir': 'black', 'nous': 'we', 'nuit': 'night',
+    'nulle': 'no · nulle part = nowhere', 'nice': 'Nice (city)', 'on': 'one, people, we', 'ont': '(they) have', 'oui': 'yes', 'ouvert': 'opened',
+    'où': 'where', 'paie': 'pays', 'paris': 'Paris (city)', 'part': 'part · nulle part = nowhere', 'partait': 'was leaving', 'pas': 'not (ne … pas)', 'passe': 'passes, walks by',
+    'paul': 'Paul (name)', 'pendant': 'during, for', 'petit': 'small, little', 'petite': 'small, little (fem.)', 'plaît': 'pleases · s’il vous plaît = please',
+    'plein': 'full', 'plus': 'more; no more (ne … plus = no longer) · la plus belle = the most beautiful', 'pomme': 'apple', 'pour': 'for; in order to', 'prend': 'takes',
+    'presque': 'almost', 'pris': 'taken', 'près': 'near (près de = close to)', 'puis': 'then', "qu'": 'that, what (before a vowel) · qu’est-ce que = what',
+    'quand': 'when', 'que': 'that, what', 'quel': 'which, what', 'quelle': 'which, what (fem.)', 'quelques': 'a few, some', 'qui': 'who, which',
+    'regarde': 'watches, looks at', 'regardent': '(they) watch, look at', 'regarder': 'to watch, to look at', 'regardez': 'look! (formal / plural)',
+    'reparti': 'set off again (est reparti)', 'restés': 'stayed (sont restés)', 'rit': 'laughs', 'roues': 'wheels', 'rouge': 'red', 'rue': 'street',
+    'régulier': 'steady, regular', 'répondu': 'answered', "s'": 'himself, herself, itself (reflexive) · s’il = if it', 'sac': 'bag', 'samedi': 'Saturday',
+    'serveur': 'waiter', 'seulement': 'only', 'si': 'if; so', 'silence': 'silence', 'soir-là': 'that evening (ce soir-là)', 'sommeil': 'sleepiness · avoir sommeil = to be sleepy',
+    'son': 'his, her', 'sont': '(they) are', 'sort': 'goes out, leaves', 'souri': 'smiled', 'table': 'table', 'tartine': 'slice of bread with butter or jam',
+    'tombe': 'falls', 'tous': 'all (pl.)', 'tout': 'all, everything · du tout = at all', 'train': 'train', 'triste': 'sad', 'trois': 'three', 'très': 'very',
+    'un': 'a, an (masc.); one', 'une': 'a, an (fem.); one', 'vers': 'toward; around (time)', 'vieil': 'old (before a vowel)', 'ville': 'town, city',
+    'voici': 'here is, this is', 'voir': 'to see', 'voit': 'sees', 'vous': 'you (formal / plural)', 'voulez': '(you) want', 'voyage': 'trip, journey',
+    'ça': 'that, this (informal)', 'va': 'goes',
+    'vraiment': 'really', 'y': 'there · il y a = there is', 'à': 'to, at, in', 'échangé': 'exchanged', 'étoiles': 'stars', 'était': 'was',
+
+  },
+};
+// DATA END
+
+const MILESTONES = [
+  [0, 'First contact', 'Speech is a stream of sound. Pictures and context carry the meaning.'],
+  [25, 'Word boundaries', 'You start hearing where words begin and end in slow, clear speech.'],
+  [75, 'Slow stories', 'Simple, visual stories make sense without translation.'],
+  [150, 'Everyday topics', 'You follow clear speech about familiar topics, with gaps.'],
+  [300, 'Learner podcasts', 'Content for learners is comfortable. Native speech is possible with effort.'],
+  [600, 'Native content', 'You enjoy many shows and podcasts made for native speakers.'],
+  [1000, 'Most situations', 'Most native content on familiar topics is clear.'],
+  [1500, 'Fluent listening', 'Understanding is rarely the bottleneck anymore.'],
+];
+const OUTSIDE_KINDS = ['Podcast', 'Video or TV', 'Conversation', 'Reading elsewhere'];
+
+/* ---------- state ---------- */
+const KEY = 'lento:v1';
+function defaults() {
+  return { v: 1, lang: 'es', words: { es: {}, fr: {} }, log: { es: {}, fr: {} }, done: {}, outside: [], prefs: { rate: 0.85, marks: true, hide: false } };
+}
+function load() {
+  const d = defaults();
+  try {
+    const o = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (o && o.v === 1) {
+      return { ...d, ...o, words: { ...d.words, ...o.words }, log: { ...d.log, ...o.log }, prefs: { ...d.prefs, ...o.prefs } };
+    }
+  } catch (e) {}
+  return d;
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+let S = load();
+if (!LANGS[S.lang]) S.lang = 'es';
+
+/* ---------- helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const app = $('#app');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const z2 = n => String(n).padStart(2, '0');
+const dayKey = (d = new Date()) => `${d.getFullYear()}-${z2(d.getMonth() + 1)}-${z2(d.getDate())}`;
+function fmtDur(sec) {
+  const m = Math.floor(sec / 60), h = Math.floor(m / 60);
+  return h ? `${h}h ${z2(m % 60)}m` : `${m}m`;
+}
+const fmtClock = sec => `${Math.floor(sec / 60)}:${z2(sec % 60)}`;
+
+const TOK = /\p{L}+['’](?=\p{L})|\p{L}+(?:-\p{L}+)*/gu;
+const keyOf = t => t.toLowerCase().replace(/’/g, "'");
+const NAMESET = Object.fromEntries(Object.entries(NAMES).map(([l, a]) => [l, new Set(a)]));
+const isName = (lang, k) => NAMESET[lang].has(k);
+const tokenKeys = text => Array.from(text.matchAll(TOK), m => keyOf(m[0]));
+function wstate(lang, k) { return isName(lang, k) ? 2 : (S.words[lang][k] || 0); }
+function wclass(lang, k) { return isName(lang, k) ? 's-name' : ['s-new', 's-learn', 's-known'][wstate(lang, k)]; }
+function wrapWords(text, lang) {
+  let out = '', last = 0;
+  for (const m of text.matchAll(TOK)) {
+    const k = keyOf(m[0]);
+    out += esc(text.slice(last, m.index)) + `<span class="w ${wclass(lang, k)}" data-k="${esc(k)}" tabindex="0" role="button">${esc(m[0])}</span>`;
+    last = m.index + m[0].length;
+  }
+  return out + esc(text.slice(last));
+}
+function storyKeys(st) { return st._k || (st._k = st.sentences.flatMap(s => tokenKeys(s[0]))); }
+function coverage(st) {
+  const ks = storyKeys(st);
+  let sum = 0;
+  for (const k of ks) { const s = wstate(st.lang, k); sum += s === 2 ? 1 : s === 1 ? 0.5 : 0; }
+  return ks.length ? sum / ks.length : 0;
+}
+const pct = x => Math.round(x * 100);
+const readMinutes = st => Math.max(1, Math.round(storyKeys(st).length / LEVELS[st.level].wpm));
+function badge(st) {
+  if (S.done[st.id]) return ['done', 'Finished'];
+  const c = coverage(st);
+  if (c >= 0.98) return ['easy', 'Easy read'];
+  if (c >= 0.85) return ['zone', 'In your zone'];
+  if (st.level === 0) return ['start', 'Start here'];
+  return ['stretch', 'Stretch'];
+}
+function nextUp(lang) {
+  const list = STORIES.filter(s => s.lang === lang && !S.done[s.id]);
+  if (!list.length) return null;
+  const zone = list.filter(s => { const c = coverage(s); return c >= 0.85 && c < 0.98; }).sort((a, b) => a.level - b.level);
+  return zone[0] || list.sort((a, b) => a.level - b.level)[0];
+}
+function totals(lang) {
+  let r = 0, o = 0;
+  for (const e of Object.values(S.log[lang] || {})) { r += e.r || 0; o += e.o || 0; }
+  return { r, o, t: r + o };
+}
+function streak(lang) {
+  const L = S.log[lang] || {}, d = new Date();
+  const has = x => { const e = L[dayKey(x)]; return e && (e.r || 0) + (e.o || 0) >= 60; };
+  if (!has(d)) d.setDate(d.getDate() - 1);
+  let n = 0;
+  while (has(d)) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+function countWords(lang, state) { return Object.values(S.words[lang]).filter(v => v === state).length; }
+function logEntry(lang, day) { const L = S.log[lang] || (S.log[lang] = {}); return L[day] || (L[day] = { r: 0, o: 0 }); }
+
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+}
+
+/* ---------- speech ---------- */
+const synth = 'speechSynthesis' in window ? window.speechSynthesis : null;
+let voices = [];
+function loadVoices() { try { voices = synth ? synth.getVoices() : []; } catch (e) { voices = []; } }
+if (synth) { loadVoices(); synth.addEventListener?.('voiceschanged', () => { loadVoices(); if (cur) updateVoiceNote(); }); }
+function voiceFor(lang) {
+  const t = LANGS[lang].tts.toLowerCase();
+  const norm = v => v.lang.replace('_', '-').toLowerCase();
+  return voices.find(v => norm(v) === t) || voices.find(v => norm(v).startsWith(lang)) || null;
+}
+function say(text, lang, onend) {
+  if (!synth) { onend && onend(); return; }
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = LANGS[lang].tts; u.rate = S.prefs.rate;
+  const v = voiceFor(lang); if (v) u.voice = v;
+  u.onend = u.onerror = () => onend && onend();
+  synth.speak(u);
+}
+let playTok = 0, playing = false;
+function stopAudio() {
+  playTok++; playing = false;
+  if (synth) synth.cancel();
+  document.querySelectorAll('.sent.speaking').forEach(e => e.classList.remove('speaking'));
+  const b = $('#play-all'); if (b) b.innerHTML = playIcon + 'Listen';
+}
+function playFrom(i, single) {
+  if (!cur) return;
+  stopAudio();
+  const tok = playTok, st = cur.story;
+  playing = true;
+  const b = $('#play-all'); if (b && !single) b.innerHTML = pauseIcon + 'Pause';
+  const step = j => {
+    if (tok !== playTok) return;
+    document.querySelectorAll('.sent.speaking').forEach(e => e.classList.remove('speaking'));
+    if (j >= st.sentences.length || (single && j > i)) { stopAudio(); return; }
+    const li = document.querySelector(`.sent[data-i="${j}"]`);
+    if (li) { li.classList.add('speaking'); if (!single) li.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
+    say(st.sentences[j][0], st.lang, () => { if (tok === playTok) setTimeout(() => step(j + 1), 450); });
+  };
+  step(i);
+}
+const playIcon = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0l9 5-9 5z"/></svg>';
+const pauseIcon = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0h3v10H1zM6 0h3v10H6z"/></svg>';
+
+/* ---------- input timer ---------- */
+let cur = null; // { story, pending, total, answers }
+let lastAct = Date.now();
+['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(ev => addEventListener(ev, () => { lastAct = Date.now(); }, { passive: true, capture: true }));
+function commit() {
+  if (!cur || !cur.pending) return;
+  logEntry(cur.story.lang, dayKey()).r += cur.pending;
+  cur.pending = 0; save();
+}
+setInterval(() => {
+  if (!cur || cur.finished || document.visibilityState !== 'visible') return;
+  if (Date.now() - lastAct > 90000 && !playing) return; // idle for 90s: stop counting
+  cur.pending++; cur.total++;
+  if (cur.pending >= 15) commit();
+  const t = $('#timer b'); if (t) t.textContent = fmtClock(cur.total);
+}, 1000);
+addEventListener('pagehide', commit);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') commit(); });
+
+/* ---------- chrome ---------- */
+function renderLangs() {
+  $('#langs').innerHTML = Object.entries(LANGS).map(([k, L]) =>
+    `<button type="button" data-lang="${k}" aria-pressed="${S.lang === k}" title="${L.name}">${L.short}</button>`).join('');
+}
+function setNav(which) {
+  document.querySelectorAll('[data-nav]').forEach(a => a.toggleAttribute('aria-current', a.dataset.nav === which));
+  document.querySelectorAll('[data-nav]').forEach(a => { if (a.dataset.nav === which) a.setAttribute('aria-current', 'page'); });
+}
+
+/* ---------- library ---------- */
+function renderLibrary() {
+  setNav('library');
+  const lang = S.lang, L = LANGS[lang], t = totals(lang);
+  const mine = STORIES.filter(s => s.lang === lang);
+  const nu = nextUp(lang);
+  let h = `<section class="intro">
+    <div>
+      <p class="eyebrow">${L.name} · comprehensible input</p>
+      <h1>Understand first. <span>Speaking follows.</span></h1>
+      <p class="lede">Read and listen to short stories pitched just above your level. Tap a word only when the meaning breaks down. Progress is measured in hours of ${L.name} you understood.</p>
+    </div>
+    <div class="stats" aria-label="Your ${L.name} so far">
+      <div><b>${fmtDur(t.t)}</b><span>input logged</span></div>
+      <div><b>${countWords(lang, 2)}</b><span>known words</span></div>
+      <div><b>${mine.filter(s => S.done[s.id]).length}/${mine.length}</b><span>stories read</span></div>
+    </div>
+  </section>`;
+  if (nu) {
+    const c = coverage(nu);
+    const why = c >= 0.85
+      ? `You already know about ${pct(c)}% of its words. That is the range where new words become clear from context.`
+      : nu.level === 0
+        ? 'Built for day one. Pictures and repetition carry the meaning, so you need no prior vocabulary.'
+        : `You know about ${pct(c)}% of its words. Expect to lean on the pictures and tap more often.`;
+    h += `<a class="upnext" href="#read-${nu.id}">
+      <span class="cover" aria-hidden="true">${nu.cover}</span>
+      <div><p class="eyebrow">Up next for you · ${LEVELS[nu.level].name}</p><h2 lang="${lang}">${esc(nu.title)}</h2><p>${why}</p></div>
+      <span class="go">Start reading →</span></a>`;
+  } else {
+    h += `<div class="upnext"><span class="cover" aria-hidden="true">🎉</span><div><p class="eyebrow">Library complete</p><h2>You’ve read every ${L.name} story.</h2><p>Reread a favorite at a faster speed, or log podcasts and shows on the Progress page.</p></div></div>`;
+  }
+  LEVELS.forEach((lv, i) => {
+    const list = mine.filter(s => s.level === i);
+    if (!list.length) return;
+    h += `<section class="shelf"><div class="shelf-head"><h2>${lv.name}</h2><span class="cefr">≈ ${lv.cefr}</span><p>${lv.desc}</p></div><div class="cards">`;
+    for (const st of list) {
+      const [cls, label] = badge(st), c = pct(coverage(st));
+      h += `<a class="card" href="#read-${st.id}">
+        <div class="card-top"><span class="cover" aria-hidden="true">${st.cover}</span><span class="badge b-${cls}">${label}</span></div>
+        <h3 lang="${lang}">${esc(st.title)}</h3><p class="en">${esc(st.en)}</p>
+        <div class="meter" style="--v:${c}%"><i></i></div>
+        <p class="meta">${c}% known · ${storyKeys(st).length} words · ~${readMinutes(st)} min</p></a>`;
+    }
+    h += `</div></section>`;
+  });
+  h += `<aside class="method">
+    <div><h3>Stay in your zone</h3><p>Pick stories where you know 85–98% of the words. Below that, meaning collapses. Above it, there is little left to acquire.</p></div>
+    <div><h3>Listen before you look</h3><p>Turn on “Hide text” and play the audio with the pictures. Reveal a sentence only when you are lost.</p></div>
+    <div><h3>Count hours, not drills</h3><p>Acquisition comes from understood messages. Every minute you spend reading here is logged, and you can add podcasts and shows too.</p></div>
+  </aside>`;
+  app.innerHTML = h;
+}
+
+/* ---------- reader ---------- */
+function newWordsLeft(st) {
+  return [...new Set(storyKeys(st))].filter(k => !isName(st.lang, k) && wstate(st.lang, k) === 0).length;
+}
+function renderReader(st) {
+  setNav('library');
+  if (S.lang !== st.lang) { S.lang = st.lang; save(); renderLangs(); }
+  cur = { story: st, pending: 0, total: 0, answers: {}, finished: false };
+  const lv = LEVELS[st.level], pics = st.sentences.some(s => s[2]);
+  const c = pct(coverage(st));
+  let h = `<article class="reader ${S.prefs.marks ? 'marks' : ''} ${S.prefs.hide ? 'hide-text' : ''} ${pics ? 'has-pics' : ''}" id="reader">
+    <a class="back" href="#library">← All stories</a>
+    <header class="r-head">
+      <p class="eyebrow">${lv.name} · ≈ ${lv.cefr} · ${storyKeys(st).length} words</p>
+      <h1 lang="${st.lang}">${esc(st.title)}</h1>
+      <p class="sub">${esc(st.en)}</p>
+      <div class="cov-line"><div class="meter" style="--v:${c}%" id="cov-meter"><i></i></div><span id="cov-text">You know about ${c}% of these words</span></div>
+    </header>
+    <div class="controls" role="toolbar" aria-label="Reading controls">
+      <button class="btn primary small" id="play-all" type="button">${playIcon}Listen</button>
+      <select id="rate" aria-label="Speech speed">
+        ${[[0.6, 'Very slow'], [0.75, 'Slow'], [0.85, 'Relaxed'], [1, 'Natural']].map(([v, n]) => `<option value="${v}" ${S.prefs.rate == v ? 'selected' : ''}>${n}</option>`).join('')}
+      </select>
+      <label class="toggle"><input type="checkbox" id="hide" ${S.prefs.hide ? 'checked' : ''}> Hide text</label>
+      <label class="toggle"><input type="checkbox" id="marks" ${S.prefs.marks ? 'checked' : ''}> Mark new words</label>
+      <span class="timer" id="timer">Input <b>0:00</b></span>
+    </div>
+    <p class="voice-note" id="voice-note" hidden></p>
+    <ol class="sents">`;
+  st.sentences.forEach(([tl, en, pic], i) => {
+    h += `<li class="sent" data-i="${i}">
+      ${pics ? `<div class="pic" aria-hidden="true">${pic || ''}</div>` : ''}
+      <div>
+        <p class="tl" lang="${st.lang}">${wrapWords(tl, st.lang)}</p>
+        <p class="en-tr" hidden>${esc(en)}</p>
+        <div class="s-actions">
+          <button class="icon-btn" type="button" data-say="${i}" aria-label="Play sentence ${i + 1}">${playIcon}Play</button>
+          <button class="icon-btn" type="button" data-tr="${i}" aria-expanded="false">EN</button>
+        </div>
+      </div></li>`;
+  });
+  h += `</ol>
+    <section class="panel" aria-labelledby="chk-h">
+      <h2 id="chk-h">Check your understanding</h2>
+      <p>Answer in your head first, then pick. These questions only check whether the story came through.</p>
+      ${st.questions.map(([q, opts], qi) => `<div class="q" data-q="${qi}">
+        <p class="q-text" lang="${st.lang}">${wrapWords(q, st.lang)}</p>
+        <div class="opts">${opts.map((o, oi) => `<button type="button" class="opt" lang="${st.lang}" data-q="${qi}" data-o="${oi}">${esc(o)}</button>`).join('')}</div>
+        <p class="q-fb" aria-live="polite"></p></div>`).join('')}
+    </section>
+    <section class="panel" id="finish-box">${finishForm(st)}</section>
+  </article>`;
+  app.innerHTML = h;
+  scrollTo(0, 0);
+  updateVoiceNote();
+}
+function finishForm(st) {
+  const n = newWordsLeft(st);
+  return `<h2>Finished the story?</h2>
+    <p>Finishing logs your input time and updates your vocabulary.</p>
+    ${n ? `<label class="chk"><input type="checkbox" id="mark-rest" checked><span>Mark the <b id="left-n">${n}</b> word${n === 1 ? '' : 's'} I never tapped as known</span></label>` : '<p style="margin-block:14px 18px">Every word in this story is already marked.</p>'}
+    <button class="btn primary" type="button" id="finish">Finish story</button>`;
+}
+function updateVoiceNote() {
+  const n = $('#voice-note'); if (!n || !cur) return;
+  const L = LANGS[cur.story.lang];
+  if (!synth) { n.hidden = false; n.textContent = 'This browser has no text-to-speech, so audio is unavailable. Reading still counts as input.'; }
+  else if (voices.length && !voiceFor(cur.story.lang)) { n.hidden = false; n.textContent = `No ${L.name} voice is installed on this device, so playback may use a default voice. Add a ${L.name} voice in your system’s speech settings for the best audio.`; }
+  else n.hidden = true;
+}
+function refreshReaderStats() {
+  if (!cur) return;
+  const c = pct(coverage(cur.story));
+  const m = $('#cov-meter'); if (m) m.style.setProperty('--v', c + '%');
+  const t = $('#cov-text'); if (t) t.textContent = `You know about ${c}% of these words`;
+  const ln = $('#left-n'); if (ln) ln.textContent = newWordsLeft(cur.story);
+}
+function finishStory() {
+  const st = cur.story;
+  commit();
+  let moved = 0;
+  const mark = $('#mark-rest');
+  if (mark && mark.checked) {
+    for (const k of new Set(storyKeys(st))) {
+      if (!isName(st.lang, k) && wstate(st.lang, k) === 0) { S.words[st.lang][k] = 2; moved++; }
+    }
+  }
+  const qs = st.questions.length, right = Object.values(cur.answers).filter(Boolean).length;
+  S.done[st.id] = { at: dayKey(), score: `${right}/${qs}` };
+  cur.finished = true;
+  save();
+  document.querySelectorAll('#reader .w').forEach(el => { el.className = 'w ' + wclass(st.lang, el.dataset.k); });
+  refreshReaderStats();
+  const nu = nextUp(st.lang), t = totals(st.lang);
+  $('#finish-box').innerHTML = `<h2>Story finished</h2>
+    <p class="done-sum">You spent <b>${fmtClock(cur.total)}</b> with this story${moved ? ` and moved <b>${moved}</b> words to Known` : ''}. Your ${LANGS[st.lang].name} total is now <b>${fmtDur(t.t)}</b>.</p>
+    <div class="row">${nu ? `<a class="btn primary" href="#read-${nu.id}">Next: <span lang="${nu.lang}">${esc(nu.title)}</span> →</a>` : ''}<a class="btn" href="#library">All stories</a><a class="btn" href="#progress">See progress</a></div>`;
+  toast('Story finished and input logged');
+}
+
+/* ---------- word sheet ---------- */
+let sheetWord = null;
+function openSheet(el) {
+  const lang = cur ? cur.story.lang : S.lang, k = el.dataset.k;
+  document.querySelectorAll('.w.active').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  if (!isName(lang, k) && wstate(lang, k) === 0) setWord(lang, k, 1); // looking a word up means you are learning it
+  sheetWord = { lang, k, text: el.textContent };
+  $('#sh-word').textContent = el.textContent;
+  $('#sh-word').lang = lang;
+  const g = DICT[lang][k];
+  const gl = $('#sh-gloss');
+  gl.textContent = g || 'No dictionary entry yet. Tap EN under the sentence to see its translation.';
+  gl.classList.toggle('none', !g);
+  syncSheetStates();
+  $('#sheet').hidden = false;
+}
+function syncSheetStates() {
+  if (!sheetWord) return;
+  const s = wstate(sheetWord.lang, sheetWord.k), name = isName(sheetWord.lang, sheetWord.k);
+  document.querySelectorAll('#sh-states button').forEach(b => { b.setAttribute('aria-pressed', String(+b.dataset.s === s)); b.disabled = name; });
+}
+function closeSheet() {
+  $('#sheet').hidden = true; sheetWord = null;
+  document.querySelectorAll('.w.active').forEach(e => e.classList.remove('active'));
+}
+function setWord(lang, k, s) {
+  if (s === 0) delete S.words[lang][k]; else S.words[lang][k] = s;
+  save();
+  const cls = wclass(lang, k);
+  document.querySelectorAll(`.w[data-k="${CSS.escape(k)}"]`).forEach(el => { el.classList.remove('s-new', 's-learn', 's-known'); el.classList.add(cls); });
+  refreshReaderStats();
+}
+
+/* ---------- progress ---------- */
+function niceMax(v) { for (const n of [10, 15, 20, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720]) if (v <= n) return n; return Math.ceil(v / 60) * 60; }
+function chartSVG(lang) {
+  const days = [];
+  for (let i = 13; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const e = (S.log[lang] || {})[dayKey(d)] || { r: 0, o: 0 }; days.push({ d, r: (e.r || 0) / 60, o: (e.o || 0) / 60 }); }
+  const max = niceMax(Math.max(...days.map(x => x.r + x.o)));
+  const W = 560, H = 190, l = 40, r = 8, top = 10, bot = 26, ch = H - top - bot, cw = (W - l - r) / 14, bw = cw * 0.58;
+  const y = v => top + ch - (v / max) * ch;
+  const lab = v => v >= 60 && v % 60 === 0 ? `${v / 60}h` : `${v}m`;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Minutes of input per day over the last 14 days">`;
+  for (const v of [0, max / 2, max]) s += `<line class="grid" x1="${l}" x2="${W - r}" y1="${y(v)}" y2="${y(v)}"/><text x="${l - 6}" y="${y(v) + 4}" text-anchor="end">${lab(v)}</text>`;
+  days.forEach((x, i) => {
+    const cx = l + cw * i + cw / 2, x0 = cx - bw / 2;
+    if (x.r > 0) s += `<rect class="r" x="${x0}" y="${y(x.r)}" width="${bw}" height="${y(0) - y(x.r)}" rx="2"><title>${Math.round(x.r)} min reading</title></rect>`;
+    if (x.o > 0) s += `<rect class="o" x="${x0}" y="${y(x.r + x.o)}" width="${bw}" height="${y(x.r) - y(x.r + x.o)}" rx="2"><title>${Math.round(x.o)} min outside</title></rect>`;
+    const today = i === 13;
+    s += `<text x="${cx}" y="${H - 8}" text-anchor="middle" class="${today ? 'today' : ''}">${today ? 'Today' : x.d.toLocaleDateString('en', { weekday: 'narrow' })}</text>`;
+  });
+  return s + '</svg>';
+}
+function renderProgress() {
+  setNav('progress');
+  const lang = S.lang, L = LANGS[lang], t = totals(lang), hrs = t.t / 3600, sk = streak(lang);
+  let reachedIdx = 0;
+  MILESTONES.forEach(([m], i) => { if (hrs >= m) reachedIdx = i; });
+  const ladder = MILESTONES.map(([m, name, desc], i) => {
+    const reached = i <= reachedIdx, current = i === reachedIdx, next = i === reachedIdx + 1;
+    let extra = '';
+    if (next) {
+      const prev = MILESTONES[reachedIdx][0], p = Math.min(100, ((hrs - prev) / (m - prev)) * 100);
+      extra = `<div class="meter" style="--v:${p.toFixed(1)}%"><i></i></div><small>${(m - hrs).toFixed(1)} hours to go</small>`;
+    }
+    return `<li class="${reached ? 'reached' : ''} ${current ? 'current' : ''} ${next ? 'nextm' : ''}"><span class="h">${m}h</span><div><b>${name}</b>${desc}${extra}</div></li>`;
+  }).join('');
+  const learning = Object.entries(S.words[lang]).filter(([, v]) => v === 1).map(([k]) => k);
+  const recent = S.outside.filter(o => o.lang === lang).slice(-5).reverse();
+  app.innerHTML = `<section class="p-head">
+      <div><p class="eyebrow">${L.name} · your input</p><h1>Hours you understood</h1></div>
+    </section>
+    <div class="grid2">
+      <div style="display:flex;flex-direction:column;gap:20px;min-width:0">
+        <div class="card-p">
+          <p class="big">${Math.floor(hrs)}<small>h</small> ${z2(Math.floor((t.t / 60) % 60))}<small>m</small></p>
+          <p class="split">${fmtDur(t.r)} reading here · ${fmtDur(t.o)} outside · ${sk ? `${sk}-day streak` : 'No streak yet'}</p>
+          ${chartSVG(lang)}
+          <div class="legend"><span><i style="background:var(--accent)"></i>Reading in Lento</span><span><i style="background:var(--mark)"></i>Outside input</span></div>
+          ${t.t === 0 ? `<p class="empty">Nothing logged yet. Open a story and the timer starts on its own.</p>` : ''}
+        </div>
+        <div class="card-p">
+          <h2>Log outside input</h2>
+          <p class="hint">Podcasts, shows and conversations count when you understood most of them.</p>
+          <form class="log" id="o-form">
+            <label for="o-min">Minutes<input id="o-min" type="number" min="1" max="600" value="20" required></label>
+            <label for="o-kind">Kind<select id="o-kind">${OUTSIDE_KINDS.map(k => `<option>${k}</option>`).join('')}</select></label>
+            <label for="o-date">Day<input id="o-date" type="date" value="${dayKey()}" max="${dayKey()}" required></label>
+            <button class="btn primary" type="submit">Add to log</button>
+          </form>
+          ${recent.length ? `<ul class="recent">${recent.map(o => `<li><span>${esc(o.kind)}</span><span>${o.mins} min · ${new Date(o.date + 'T12:00').toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span><button class="linkish" type="button" data-rm="${o.id}">Remove</button></li>`).join('')}</ul>` : ''}
+        </div>
+        <div class="card-p">
+          <h2>Vocabulary</h2>
+          <p class="hint">Words you tap become “learning”. Unknown words left in a finished story can move to “known”.</p>
+          <div class="vocab-counts"><div><b>${countWords(lang, 2)}</b><span>known</span></div><div><b>${learning.length}</b><span>learning</span></div></div>
+          ${learning.length ? `<div class="chips">${learning.slice(0, 80).map(k => `<button class="chip" type="button" data-know="${esc(k)}" title="Mark as known"><span lang="${lang}">${esc(k)}</span><small>${esc((DICT[lang][k] || '').split(/[,·;(]/)[0].trim())}</small></button>`).join('')}</div><p class="empty">Tap a word once it feels familiar to mark it known.</p>` : `<p class="empty">No learning words yet. Tap any word while reading to look it up.</p>`}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:20px;min-width:0">
+        <div class="card-p">
+          <h2>Roadmap</h2>
+          <p class="hint">A rough guide drawn from learners who acquire languages mostly through input. Your pace will vary.</p>
+          <ol class="ladder">${ladder}</ol>
+        </div>
+        <div class="card-p">
+          <h2>Start over</h2>
+          <p class="hint">Clears ${L.name} words, input log and finished stories on this device.</p>
+          <div style="margin-top:12px"><button class="btn danger small" type="button" id="reset">Reset ${L.name} progress</button></div>
+          <div class="confirm" id="reset-confirm" hidden><p>Reset all ${L.name} progress? This can’t be undone.</p><div class="row"><button class="btn danger small" type="button" id="reset-yes">Reset</button><button class="btn small" type="button" id="reset-no">Cancel</button></div></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ---------- routing ---------- */
+function leaveReader() { stopAudio(); commit(); closeSheet(); cur = null; }
+function route() {
+  leaveReader();
+  const h = location.hash.slice(1);
+  if (h.startsWith('read-')) {
+    const st = STORIES.find(s => s.id === h.slice(5));
+    if (st) return renderReader(st);
+  }
+  if (h === 'progress') return renderProgress();
+  renderLibrary();
+}
+addEventListener('hashchange', route);
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const t = e.target;
+  const lb = t.closest('[data-lang]');
+  if (lb) {
+    S.lang = lb.dataset.lang; save(); renderLangs();
+    if (location.hash.startsWith('#read-')) location.hash = '#library'; else route();
+    return;
+  }
+  const w = t.closest('.w');
+  if (w) { openSheet(w); return; }
+  const tl = t.closest('.hide-text .sent:not(.revealed) .tl');
+  if (tl) { tl.closest('.sent').classList.add('revealed'); return; }
+  if (t.closest('#play-all')) { playing ? stopAudio() : playFrom(0); return; }
+  const sy = t.closest('[data-say]');
+  if (sy) { playFrom(+sy.dataset.say, true); return; }
+  const tr = t.closest('[data-tr]');
+  if (tr) {
+    const p = tr.closest('.sent').querySelector('.en-tr');
+    p.hidden = !p.hidden; tr.setAttribute('aria-expanded', String(!p.hidden));
+    return;
+  }
+  const op = t.closest('.opt');
+  if (op && cur && !op.disabled) {
+    const qi = +op.dataset.q, oi = +op.dataset.o, q = cur.story.questions[qi], ok = oi === q[2];
+    cur.answers[qi] = ok;
+    const box = op.closest('.q');
+    box.querySelectorAll('.opt').forEach((b, i) => { b.disabled = true; if (i === q[2]) b.classList.add('right'); });
+    if (!ok) op.classList.add('wrong');
+    const fb = box.querySelector('.q-fb');
+    fb.className = 'q-fb ' + (ok ? 'ok' : 'no');
+    fb.textContent = ok ? 'Right.' : `Not quite. The answer is “${q[1][q[2]]}”.`;
+    return;
+  }
+  if (t.closest('#finish')) { finishStory(); return; }
+  const st = t.closest('#sh-states button');
+  if (st && sheetWord) { setWord(sheetWord.lang, sheetWord.k, +st.dataset.s); syncSheetStates(); return; }
+  if (t.closest('#sh-say') && sheetWord) { stopAudio(); say(sheetWord.text, sheetWord.lang); return; }
+  if (t.closest('#sh-close')) { closeSheet(); return; }
+  const kn = t.closest('[data-know]');
+  if (kn) { S.words[S.lang][kn.dataset.know] = 2; save(); toast(`“${kn.dataset.know}” marked as known`); renderProgress(); return; }
+  const rm = t.closest('[data-rm]');
+  if (rm) {
+    const i = S.outside.findIndex(o => String(o.id) === rm.dataset.rm);
+    if (i > -1) { const o = S.outside[i]; const e2 = logEntry(o.lang, o.date); e2.o = Math.max(0, (e2.o || 0) - o.mins * 60); S.outside.splice(i, 1); save(); toast('Entry removed'); renderProgress(); }
+    return;
+  }
+  if (t.closest('#reset')) { $('#reset-confirm').hidden = false; return; }
+  if (t.closest('#reset-no')) { $('#reset-confirm').hidden = true; return; }
+  if (t.closest('#reset-yes')) {
+    const lang = S.lang;
+    S.words[lang] = {}; S.log[lang] = {}; S.outside = S.outside.filter(o => o.lang !== lang);
+    for (const s of STORIES) if (s.lang === lang) delete S.done[s.id];
+    save(); toast(`${LANGS[lang].name} progress reset`); renderProgress(); return;
+  }
+  if (!t.closest('#sheet')) closeSheet();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeSheet(); return; }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList?.contains('w')) { e.preventDefault(); openSheet(e.target); }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'rate') { S.prefs.rate = +t.value; save(); if (playing) stopAudio(); }
+  if (t.id === 'hide') { S.prefs.hide = t.checked; save(); $('#reader').classList.toggle('hide-text', t.checked); if (!t.checked) document.querySelectorAll('.sent.revealed').forEach(s => s.classList.remove('revealed')); }
+  if (t.id === 'marks') { S.prefs.marks = t.checked; save(); $('#reader').classList.toggle('marks', t.checked); }
+});
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'o-form') return;
+  e.preventDefault();
+  const mins = Math.round(+$('#o-min').value), kind = $('#o-kind').value, date = $('#o-date').value || dayKey();
+  if (!(mins > 0)) return;
+  logEntry(S.lang, date).o += mins * 60;
+  S.outside.push({ id: Date.now(), lang: S.lang, date, mins, kind });
+  save(); toast(`Added ${mins} min of ${kind.toLowerCase()}`); renderProgress();
+});
+
+renderLangs();
+route();
+</script>
+</body>
+</html>
